@@ -124,11 +124,10 @@ install_mega_sdk() {
 process_files() {
     chmod +x "$BIN_DIR/xnox"
 
-    # IMPORTANT FIX
-    # Bot expects qbittorrent-nox binary
+    # qBittorrent Fix
     ln -sf "$BIN_DIR/xnox" /usr/bin/qbittorrent-nox
 
-    # Extract FFmpeg
+    # FFmpeg
     tar -xf "$TEMP_DIR/ffmpeg.tar.xz" -C "$TEMP_DIR"
 
     local ffmpeg_dir
@@ -140,23 +139,45 @@ process_files() {
 
     chmod +x /usr/bin/xtra /usr/bin/ffprobe /usr/bin/ffplay
 
-    # Extract UV
+    # ffmpeg alias
+    ln -sf /usr/bin/xtra /usr/bin/ffmpeg
+
+    # UV
     tar -xzf "$TEMP_DIR/uv.tar.gz" -C "$TEMP_DIR"
 
     mv "$(find "$TEMP_DIR" -type f -name "uv" | head -n 1)" /usr/bin/uv
 
     chmod +x /usr/bin/uv
 
-    # Install rclone
+    # rclone
     curl https://rclone.org/install.sh | bash
 
     chmod +x /usr/bin/rclone
     chmod +x /usr/bin/aria2c
 
-    # Safe symlinks
+    # aliases
     ln -sf /usr/bin/rclone /usr/bin/xone
     ln -sf /usr/bin/aria2c /usr/bin/xria
-    ln -sf /usr/bin/xtra /usr/bin/ffmpeg
+
+    # REQUIRED FOR BOT
+    ln -sf /usr/bin/aria2c /usr/bin/speeddemon
+
+    # aria2 daemon launcher
+    cat >/usr/local/bin/start-aria2 <<'EOF'
+#!/bin/bash
+
+aria2c \
+  --enable-rpc \
+  --rpc-listen-all=true \
+  --rpc-allow-origin-all \
+  --rpc-listen-port=6800 \
+  --daemon=true \
+  --continue=true \
+  --max-connection-per-server=16 \
+  --min-split-size=1M
+EOF
+
+    chmod +x /usr/local/bin/start-aria2
 }
 
 cleanup() {

@@ -51,7 +51,6 @@ install_packages() {
         python3-pip \
         python3-setuptools \
         python3-wheel \
-        python3-distutils \
         aria2 \
         curl \
         zstd \
@@ -89,8 +88,9 @@ install_packages() {
 
 install_mega_sdk() {
     export MEGA_SDK_VERSION=4.8.0
-    export PYTHON=python3
-    export SETUPTOOLS_USE_DISTUTILS=stdlib
+    export PYTHONWARNINGS=ignore
+
+    echo -e "\e[32m[INFO]: Building and Installing MegaSdkC++.\e[0m"
 
     git clone --depth 1 \
         --branch "v${MEGA_SDK_VERSION}" \
@@ -99,19 +99,28 @@ install_mega_sdk() {
 
     cd "$TEMP_DIR/sdk"
 
+    autoupdate -fiv
+
     ./autogen.sh
 
     ./configure \
+        CFLAGS='-fpermissive' \
+        CXXFLAGS='-fpermissive' \
+        CPPFLAGS='-fpermissive' \
+        CCFLAGS='-fpermissive' \
         --disable-silent-rules \
         --enable-python \
         --with-sodium \
-        --disable-examples
+        --disable-examples \
+        --with-python3
 
     make -j"$(nproc)"
 
     cd bindings/python
 
-    python3 setup.py install
+    python3 setup.py bdist_wheel
+
+    pip3 install dist/*.whl
 }
 
 process_files() {

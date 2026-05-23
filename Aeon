@@ -122,7 +122,11 @@ install_mega_sdk() {
 }
 
 process_files() {
-    chmod 700 "$BIN_DIR/xnox"
+    chmod +x "$BIN_DIR/xnox"
+
+    # IMPORTANT FIX
+    # Bot expects qbittorrent-nox binary
+    ln -sf "$BIN_DIR/xnox" /usr/bin/qbittorrent-nox
 
     # Extract FFmpeg
     tar -xf "$TEMP_DIR/ffmpeg.tar.xz" -C "$TEMP_DIR"
@@ -146,13 +150,17 @@ process_files() {
     # Install rclone
     curl https://rclone.org/install.sh | bash
 
-    mv /usr/bin/rclone /usr/bin/xone
-    mv /usr/bin/aria2c /usr/bin/xria
+    chmod +x /usr/bin/rclone
+    chmod +x /usr/bin/aria2c
+
+    # Safe symlinks
+    ln -sf /usr/bin/rclone /usr/bin/xone
+    ln -sf /usr/bin/aria2c /usr/bin/xria
+    ln -sf /usr/bin/xtra /usr/bin/ffmpeg
 }
 
 cleanup() {
     apt-get purge -y \
-        wget \
         perl \
         xz-utils \
         perl-modules-* \
@@ -180,8 +188,6 @@ cleanup() {
     rm -rf \
         /var/lib/apt/lists/* \
         "$TEMP_DIR" \
-        Aeon \
-        Dockerfile \
         ~/.cache \
         /tmp/* \
         /var/tmp/*

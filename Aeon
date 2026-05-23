@@ -99,8 +99,6 @@ install_mega_sdk() {
 
     cd "$TEMP_DIR/sdk"
 
-    autoupdate -fiv
-
     ./autogen.sh
 
     ./configure \

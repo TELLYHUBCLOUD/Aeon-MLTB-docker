@@ -51,6 +51,7 @@ install_packages() {
         python3-pip \
         python3-setuptools \
         python3-wheel \
+        python3-distutils \
         aria2 \
         curl \
         zstd \
@@ -88,6 +89,7 @@ install_packages() {
 
 install_mega_sdk() {
     export MEGA_SDK_VERSION=4.8.0
+    export PYTHON=python3
     export SETUPTOOLS_USE_DISTUTILS=stdlib
 
     git clone --depth 1 \

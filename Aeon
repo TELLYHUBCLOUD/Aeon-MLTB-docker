@@ -1,224 +1,135 @@
 #!/bin/bash
-# Aeon
 
-set -euo pipefail
-
-export DEBIAN_FRONTEND=noninteractive
-
-TEMP_DIR=$(mktemp -d)
-JDOWNLOADER_HOME="/JDownloader"
-BIN_DIR="/usr/local/bin"
-
-download_files() {
-    mkdir -p "$JDOWNLOADER_HOME" "$BIN_DIR"
-
-    local arch
-    arch=$(uname -m)
-
-    if [ "$arch" = "x86_64" ]; then
-        wget -qO "$BIN_DIR/xnox" \
-            "https://github.com/userdocs/qbittorrent-nox-static/releases/latest/download/x86_64-qbittorrent-nox" &
-
-        wget -qO "$TEMP_DIR/ffmpeg.tar.xz" \
-            "https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz" &
-
-        wget -qO "$TEMP_DIR/uv.tar.gz" \
-            "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-unknown-linux-gnu.tar.gz" &
-    else
-        wget -qO "$BIN_DIR/xnox" \
-            "https://github.com/userdocs/qbittorrent-nox-static/releases/latest/download/aarch64-qbittorrent-nox" &
-
-        wget -qO "$TEMP_DIR/ffmpeg.tar.xz" \
-            "https://github.com/5hojib/FFmpeg-Builds/releases/latest/download/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz" &
-
-        wget -qO "$TEMP_DIR/uv.tar.gz" \
-            "https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-unknown-linux-gnu.tar.gz" &
-    fi
-
-    wget -qO "$JDOWNLOADER_HOME/JDownloader.jar" \
-        "http://installer.jdownloader.org/JDownloader.jar" &
-
-    wait
+# Update and upgrade system packages
+update_system() {
+    apt-get update && apt-get upgrade -y
 }
 
-install_packages() {
+# Install Python 3.12 and essential dependencies
+install_python() {
+    apt-get install -y software-properties-common
+    add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update
-    apt-get upgrade -y
+    apt-get install -y python3.12 python3.12-dev python3.12-venv python3-pip libpython3.12 libpython3.12-dev
+}
 
+# Install additional system dependencies
+install_dependencies() {
     apt-get install -y --no-install-recommends \
-        python3 \
-        python3-dev \
-        python3-pip \
-        python3-setuptools \
-        python3-wheel \
-        aria2 \
-        curl \
-        zstd \
-        xz-utils \
-        git \
-        libmagic-dev \
-        p7zip-full \
-        p7zip-rar \
-        tzdata \
-        wget \
-        openjdk-21-jre \
-        openjdk-21-jre-headless \
-        build-essential \
-        gcc \
-        g++ \
-        make \
-        autoconf \
-        automake \
-        libtool \
-        m4 \
-        pkg-config \
-        swig \
-        cmake \
-        libsodium-dev \
-        libc-ares-dev \
-        libssl-dev \
-        libcrypto++-dev \
-        libsqlite3-dev \
-        libcurl4-openssl-dev \
-        libfreeimage-dev \
-        ca-certificates
-
-    ln -sf /usr/bin/python3 /usr/bin/python
+        apt-utils aria2 curl zstd git libmagic-dev \
+        locales mediainfo neofetch p7zip-full \
+        p7zip-rar tzdata wget autoconf automake \
+        build-essential cmake g++ gcc gettext \
+        gpg-agent intltool libtool make unzip zip \
+        libcurl4-openssl-dev libsodium-dev libssl-dev \
+        libcrypto++-dev libc-ares-dev libsqlite3-dev \
+        libfreeimage-dev swig libboost-all-dev \
+        libpthread-stubs0-dev zlib1g-dev
 }
 
-install_mega_sdk() {
-    export MEGA_SDK_VERSION=4.8.0
-    export PYTHONWARNINGS=ignore
+# Download and install qbittorrent-nox based on system architecture
+install_qbittorrent() {
+    ARCH=$(uname -m)
+    mkdir -p /usr/local/bin
 
-    echo -e "\e[32m[INFO]: Building and Installing MegaSdkC++.\e[0m"
+    case "$ARCH" in
+        x86_64)
+            wget -qO /usr/local/bin/xnox https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/x86_64-qbittorrent-nox
+            ;;
+        aarch64)
+            wget -qO /usr/local/bin/xnox https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/aarch64-qbittorrent-nox
+            ;;
+        *)
+            echo "Unsupported architecture for qbittorrent-nox: $ARCH"
+            exit 1
+            ;;
+    esac
 
-    git clone --depth 1 \
-        --branch "v${MEGA_SDK_VERSION}" \
-        https://github.com/meganz/sdk.git \
-        "$TEMP_DIR/sdk"
-
-    cd "$TEMP_DIR/sdk"
-
-    ./autogen.sh
-
-    ./configure \
-        CFLAGS='-fpermissive' \
-        CXXFLAGS='-fpermissive' \
-        CPPFLAGS='-fpermissive' \
-        CCFLAGS='-fpermissive' \
-        --disable-silent-rules \
-        --enable-python \
-        --with-sodium \
-        --disable-examples \
-        --with-python3
-
-    make -j"$(nproc)"
-
-    cd bindings/python
-
-    python3 setup.py bdist_wheel
-
-    pip3 install dist/*.whl
+    chmod 700 /usr/local/bin/xnox
 }
 
-process_files() {
-    chmod +x "$BIN_DIR/xnox"
+# Install FFmpeg based on system architecture
+install_ffmpeg() {
+    ARCH=$(uname -m)
+    mkdir -p /Temp
+    cd /Temp
 
-    # qBittorrent Fix
-    ln -sf "$BIN_DIR/xnox" /usr/bin/qbittorrent-nox
+    case "$ARCH" in
+        x86_64)
+            wget https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz
+            ;;
+        aarch64)
+            wget https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz
+            ;;
+        *)
+            echo "Unsupported architecture for FFmpeg: $ARCH"
+            exit 1
+            ;;
+    esac
 
-    # FFmpeg
-    tar -xf "$TEMP_DIR/ffmpeg.tar.xz" -C "$TEMP_DIR"
-
-    local ffmpeg_dir
-    ffmpeg_dir=$(find "$TEMP_DIR" -type d -name "ffmpeg-n7.1-latest-linux*" | head -n 1)
-
-    mv "$ffmpeg_dir/bin/ffmpeg" /usr/bin/xtra
-    mv "$ffmpeg_dir/bin/ffprobe" /usr/bin/ffprobe
-    mv "$ffmpeg_dir/bin/ffplay" /usr/bin/ffplay
-
+    7z x ffmpeg-n7.1-latest-linux*-gpl-7.1.tar.xz
+    7z x ffmpeg-n7.1-latest-linux*-gpl-7.1.tar
+    mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffmpeg /usr/bin/xtra
+    mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffprobe /usr/bin/ffprobe
+    mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffplay /usr/bin/ffplay
     chmod +x /usr/bin/xtra /usr/bin/ffprobe /usr/bin/ffplay
+}
 
-    # ffmpeg alias
-    ln -sf /usr/bin/xtra /usr/bin/ffmpeg
-
-    # UV
-    tar -xzf "$TEMP_DIR/uv.tar.gz" -C "$TEMP_DIR"
-
-    mv "$(find "$TEMP_DIR" -type f -name "uv" | head -n 1)" /usr/bin/uv
-
-    chmod +x /usr/bin/uv
-
-    # rclone
+# Install rclone and rename binaries
+install_rclone() {
     curl https://rclone.org/install.sh | bash
-
-    chmod +x /usr/bin/rclone
-    chmod +x /usr/bin/aria2c
-
-    # aliases
-    ln -sf /usr/bin/rclone /usr/bin/xone
-    ln -sf /usr/bin/aria2c /usr/bin/xria
-
-    # REQUIRED FOR BOT
-    ln -sf /usr/bin/aria2c /usr/bin/speeddemon
-
-    # aria2 daemon launcher
-    cat >/usr/local/bin/start-aria2 <<'EOF'
-#!/bin/bash
-
-aria2c \
-  --enable-rpc \
-  --rpc-listen-all=true \
-  --rpc-allow-origin-all \
-  --rpc-listen-port=6800 \
-  --daemon=true \
-  --continue=true \
-  --max-connection-per-server=16 \
-  --min-split-size=1M
-EOF
-
-    chmod +x /usr/local/bin/start-aria2
+    mv /usr/bin/rclone /usr/bin/xone
+    mv /usr/bin/aria2c /usr/bin/xria
 }
 
+# Install Python packages
+install_python_packages() {
+    pip3 install --break-system-packages --ignore-installed --no-cache-dir -U \
+        aiohttp aiofiles aioshutil anytree==2.8.0 apscheduler aria2p asyncio \
+        beautifulsoup4 bencoding cinemagoer cloudscraper dnspython electrogram feedparser flask gevent \
+        google-api-python-client google-auth-httplib2 google-auth-oauthlib \
+        gunicorn httpx langcodes lxml motor mutagen markdown natsort pillow psutil \
+        pybase64 pycountry python-dotenv pyshorteners python-magic qbittorrent-api requests \
+        setuptools speedtest-cli telegraph tenacity uv uvloop xattr yt-dlp[default]
+}
+
+# Clone and build MEGA SDK
+build_mega_sdk() {
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
+    cd /home/sdk
+    rm -rf .git
+    autoupdate -fIv && ./autogen.sh
+    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
+    make -j$(nproc --all)
+
+    cd bindings/python/
+    python3.12 setup.py bdist_wheel
+    pip3 install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
+}
+
+# Clean up unnecessary packages and temporary files
 cleanup() {
-    apt-get purge -y \
-        perl \
-        xz-utils \
-        perl-modules-* \
-        build-essential \
-        gcc \
-        g++ \
-        make \
-        autoconf \
-        automake \
-        libtool \
-        m4 \
-        pkg-config \
-        swig \
-        cmake
-
-    apt-get install -y --no-install-recommends \
-        git \
-        curl \
-        cpulimit
-
-    apt-get autoremove -y --purge
+    apt-get remove -y \
+        autoconf automake build-essential cmake g++ gcc gettext \
+        gpg-agent intltool libtool make unzip zip libcurl4-openssl-dev \
+        libssl-dev libc-ares-dev libsqlite3-dev swig libboost-all-dev \
+        libpthread-stubs0-dev zlib1g-dev
+    apt-get autoremove -y
     apt-get autoclean -y
-    apt-get clean -y
 
-    rm -rf \
-        /var/lib/apt/lists/* \
-        "$TEMP_DIR" \
-        ~/.cache \
-        /tmp/* \
-        /var/tmp/*
+    rm -rf /Temp /home/sdk Dockerfile
 }
 
+# Main script execution
 main() {
-    install_packages
-    download_files
-    install_mega_sdk
-    process_files
+    update_system
+    install_python
+    install_dependencies
+    install_qbittorrent
+    install_ffmpeg
+    install_rclone
+    install_python_packages
+    build_mega_sdk
     cleanup
 }
 

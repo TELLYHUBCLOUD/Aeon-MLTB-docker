@@ -148,7 +148,6 @@ process_files() {
 
     mv /usr/bin/rclone /usr/bin/xone
     mv /usr/bin/aria2c /usr/bin/xria
-    mv /usr/bin/sabnzbdplus /usr/bin/xnzb
 }
 
 cleanup() {

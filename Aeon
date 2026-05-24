@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-WORKDIR="/usr/src/app"
-VENV="$WORKDIR/xyenv"
-
 # ── Update system ──
 update_system() {
     apt-get update && apt-get upgrade -y
@@ -34,14 +31,6 @@ install_dependencies() {
         libpthread-stubs0-dev zlib1g-dev \
         pkg-config libffi-dev libpcre3-dev \
         libuv1-dev libmediainfo0v5 ca-certificates
-}
-
-# ── Setup venv ──
-setup_venv() {
-    mkdir -p "$WORKDIR"
-    cd "$WORKDIR"
-    python3.12 -m venv xyenv
-    "$VENV/bin/pip" install --upgrade pip setuptools wheel cython
 }
 
 # ── qbittorrent-nox static → xnox ──
@@ -95,19 +84,6 @@ install_rclone() {
     mv /usr/bin/aria2c /usr/bin/xria
 }
 
-# ── Python packages (venv ke andar) ──
-install_python_packages() {
-    "$VENV/bin/pip" install --no-cache-dir -U \
-        aiohttp aiofiles aioshutil "anytree==2.8.0" apscheduler \
-        aria2p asyncio beautifulsoup4 bencoding cinemagoer \
-        cloudscraper dnspython electrogram feedparser flask gevent \
-        google-api-python-client google-auth-httplib2 google-auth-oauthlib \
-        gunicorn httpx langcodes lxml motor mutagen markdown \
-        natsort pillow psutil pybase64 pycountry python-dotenv \
-        pyshorteners python-magic qbittorrent-api requests \
-        setuptools speedtest-cli telegraph tenacity uv uvloop \
-        xattr "yt-dlp[default]"
-}
 
 # ── MEGA SDK v4.8.0 ──
 build_mega_sdk() {
@@ -141,11 +117,9 @@ main() {
     update_system
     install_python
     install_dependencies
-    setup_venv
     install_qbittorrent
     install_ffmpeg
     install_rclone
-    install_python_packages
     build_mega_sdk
     cleanup
 }

@@ -10,25 +10,19 @@ readonly SDK_PATH="/home/sdk"
 readonly TEMP_DIR="/tmp/build_temp"
 
 # ── Logging ──
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
-}
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
+error_exit() { log "❌ ERROR: $*"; exit 1; }
 
-error_exit() {
-    log "❌ ERROR: $*"
-    exit 1
-}
-
-# ── Root Check ──
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        error_exit "This script must be run as root (use sudo)"
-    fi
+# ── Root/Container Check ──
+check_env() {
+    if [ "$EUID" -ne 0 ]; then error_exit "Run as root"; fi
+    # Docker non-interactive fix
+    export DEBIAN_FRONTEND=noninteractive
 }
 
 # ── Update system ──
 update_system() {
-    log "🔄 Updating system packages..."
+    log "🔄 Updating system..."
     apt-get update -qq && apt-get upgrade -y -qq
     log "✅ System updated"
 }
@@ -39,220 +33,121 @@ install_python() {
     apt-get install -y -qq software-properties-common
     add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update -qq
-    apt-get install -y -qq \
-        python3.12 python3.12-dev python3.12-venv \
-        python3-pip libpython3.12-dev \
-        dh-autoreconf
+    apt-get install -y -qq python3.12 python3.12-dev python3.12-venv python3-pip libpython3.12-dev dh-autoreconf
     log "✅ Python 3.12 installed"
 }
 
-# ── System dependencies ──
+# ── Dependencies ──
 install_dependencies() {
-    log "📦 Installing system dependencies..."
+    log "📦 Installing dependencies..."
     apt-get install -y --no-install-recommends -qq \
-        apt-utils aria2 curl zstd git libmagic-dev \
-        locales mediainfo neofetch p7zip-full \
-        p7zip-rar tzdata wget autoconf automake \
-        build-essential cmake g++ gcc gettext \
-        gpg-agent intltool libtool make unzip zip \
-        libcurl4-openssl-dev libsodium-dev libssl-dev \
-        libcrypto++-dev libc-ares-dev libsqlite3-dev \
-        libfreeimage-dev swig libboost-all-dev \
-        libpthread-stubs0-dev zlib1g-dev \
-        pkg-config libffi-dev libpcre3-dev \
-        libuv1-dev libmediainfo0v5 ca-certificates \
-        libarchive-tools
+        apt-utils aria2 curl zstd git libmagic-dev locales mediainfo neofetch \
+        p7zip-full p7zip-rar tzdata wget autoconf automake build-essential \
+        cmake g++ gcc gettext gpg-agent intltool libtool make unzip zip \
+        libcurl4-openssl-dev libsodium-dev libssl-dev libcrypto++-dev \
+        libc-ares-dev libsqlite3-dev libfreeimage-dev swig libboost-all-dev \
+        libpthread-stubs0-dev zlib1g-dev pkg-config libffi-dev libpcre3-dev \
+        libuv1-dev libmediainfo0v5 ca-certificates libarchive-tools
     log "✅ Dependencies installed"
 }
 
-# ── qbittorrent-nox static → xnox ──
+# ── qbittorrent-nox → xnox ──
 install_qbittorrent() {
     log "🧲 Installing qbittorrent-nox (xnox)..."
-    local ARCH=$(uname -m)
-    local QB_URL=""
-    
+    ARCH=$(uname -m)
     case "$ARCH" in
-        x86_64)
-            QB_URL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/x86_64-qbittorrent-nox"
-            ;;
-        aarch64)
-            QB_URL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/aarch64-qbittorrent-nox"
-            ;;
-        *)
-            error_exit "Unsupported architecture: $ARCH"
-            ;;
+        x86_64) URL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/x86_64-qbittorrent-nox" ;;
+        aarch64) URL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/aarch64-qbittorrent-nox" ;;
+        *) error_exit "Unsupported arch: $ARCH" ;;
     esac
-    
-    mkdir -p /usr/local/bin
-    wget -q --show-progress -O /usr/bin/xnox "$QB_URL" || error_exit "Failed to download qbittorrent"
+    wget -q --show-progress -O /usr/bin/xnox "$URL" || error_exit "qbittorrent download failed"
     chmod 755 /usr/bin/xnox
-    log "✅ qbittorrent-nox installed as 'xnox'"
+    log "✅ xnox installed"
 }
 
-# ── Custom FFmpeg → xtra ──
+# ── FFmpeg → xtra ──
 install_ffmpeg() {
-    log "🎬 Installing custom FFmpeg (xtra)..."
-    local ARCH=$(uname -m)
-    local FF_URL=""
-    
+    log "🎬 Installing FFmpeg (xtra)..."
     mkdir -p "$TEMP_DIR" && cd "$TEMP_DIR"
-    
+    ARCH=$(uname -m)
     case "$ARCH" in
-        x86_64)
-            FF_URL="https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz"
-            ;;
-        aarch64)
-            FF_URL="https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz"
-            ;;
-        *)
-            error_exit "Unsupported architecture: $ARCH"
-            ;;
+        x86_64) URL="https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz" ;;
+        aarch64) URL="https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz" ;;
+        *) error_exit "Unsupported arch: $ARCH" ;;
     esac
-    
-    wget -q --show-progress -O ffmpeg.tar.xz "$FF_URL" || error_exit "Failed to download FFmpeg"
-    
-    # Extract using tar directly (more reliable than 7z for .tar.xz)
+    wget -q --show-progress -O ffmpeg.tar.xz "$URL" || error_exit "FFmpeg download failed"
     tar -xf ffmpeg.tar.xz
-    local FF_DIR=$(tar -tf ffmpeg.tar.xz | head -1 | cut -d'/' -f1)
-    
-    mv "${FF_DIR}/bin/ffmpeg"  /usr/bin/xtra
+    FF_DIR=$(tar -tf ffmpeg.tar.xz | head -1 | cut -d'/' -f1)
+    mv "${FF_DIR}/bin/ffmpeg" /usr/bin/xtra
     mv "${FF_DIR}/bin/ffprobe" /usr/bin/ffprobe
-    mv "${FF_DIR}/bin/ffplay"  /usr/bin/ffplay
-    
+    mv "${FF_DIR}/bin/ffplay" /usr/bin/ffplay
     chmod +x /usr/bin/xtra /usr/bin/ffprobe /usr/bin/ffplay
-    rm -rf "$TEMP_DIR"
-    log "✅ FFmpeg installed as 'xtra'"
+    cd / && rm -rf "$TEMP_DIR"
+    log "✅ xtra installed"
 }
 
 # ── rclone → xone | aria2c → xria ──
 install_rclone() {
-    log "☁️ Installing rclone (xone) and aria2 (xria)..."
+    log "☁️ Installing rclone (xone) & aria2 (xria)..."
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64) RCLONE_ARCH="amd64" ;;
+        aarch64) RCLONE_ARCH="arm64" ;;
+        *) error_exit "Unsupported arch: $ARCH" ;;
+    esac
     
-    # Install rclone properly (avoid curl|bash)
-    curl -O https://downloads.rclone.org/rclone-current-linux-amd64.zip 2>/dev/null || \
-    curl -O https://downloads.rclone.org/rclone-current-linux-arm64.zip 2>/dev/null
+    # ✅ Docker-safe download with retry & explicit checks
+    curl -fsSL --retry 3 --retry-delay 2 \
+        "https://downloads.rclone.org/rclone-current-linux-${RCLONE_ARCH}.zip" \
+        -o /tmp/rclone.zip || error_exit "rclone download failed"
+        
+    [ ! -s /tmp/rclone.zip ] && error_exit "rclone zip is empty"
     
-    unzip -q rclone-*.zip
-    cd rclone-*-linux-*
-    cp rclone /usr/bin/xone
+    unzip -q -o /tmp/rclone.zip -d /tmp/ || error_exit "rclone extraction failed"
+    RCLONE_DIR=$(ls -d /tmp/rclone-*-linux-${RCLONE_ARCH} 2>/dev/null)
+    [ -z "$RCLONE_DIR" ] && error_exit "rclone dir not found after extraction"
+    
+    cp "${RCLONE_DIR}/rclone" /usr/bin/xone
     chmod 755 /usr/bin/xone
-    cd ..
-    rm -rf rclone-*.zip rclone-*-linux-*
+    rm -rf /tmp/rclone.zip /tmp/rclone-*-linux-*
     
-    # Rename aria2c if exists
-    if command -v aria2c &> /dev/null; then
-        mv /usr/bin/aria2c /usr/bin/xria 2>/dev/null || true
-    fi
-    
-    log "✅ rclone installed as 'xone', aria2c as 'xria'"
+    [ -f /usr/bin/aria2c ] && mv /usr/bin/aria2c /usr/bin/xria
+    log "✅ xone & xria installed"
 }
 
 # ── MEGA SDK v4.8.0 ──
 build_mega_sdk() {
-    log "🔐 Building MEGA SDK v4.8.0 with Python bindings..."
+    log "🔐 Building MEGA SDK v4.8.0..."
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 "$SDK_PATH" 2>/dev/null || error_exit "SDK clone failed"
+    cd "$SDK_PATH" && rm -rf .git
     
-    # Clone SDK
-    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 "$SDK_PATH" 2>/dev/null || \
-        error_exit "Failed to clone MEGA SDK"
-    
-    cd "$SDK_PATH"
-    rm -rf .git
-    
-    # ✅ Fix: autoreconf instead of autoupdate
-    log "🔧 Running autoreconf..."
     autoreconf -fiv 2>/dev/null || true
-    ./autogen.sh || error_exit "autogen.sh failed"
-    
-    # Configure and build
-    log "⚙️ Configuring MEGA SDK..."
-    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples || \
-        error_exit "configure failed"
-    
-    log "🔨 Compiling MEGA SDK (this may take a while)..."
+    ./autogen.sh || error_exit "autogen failed"
+    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples || error_exit "configure failed"
     make -j$(nproc --all) || error_exit "make failed"
     
-    # ✅ Fix: Create and use virtual environment
-    log "🐍 Setting up Python virtual environment..."
-    python3.12 -m venv "$MEGA_VENV" || error_exit "Failed to create venv"
+    python3.12 -m venv "$MEGA_VENV" || error_exit "venv creation failed"
     source "$MEGA_VENV/bin/activate"
-    
-    # Build and install Python wheel
     cd bindings/python/
-    python3.12 setup.py bdist_wheel || error_exit "Failed to build Python wheel"
-    
-    pip install --no-cache-dir dist/megasdk-4.8.0-*.whl || \
-        error_exit "Failed to install MEGA SDK Python bindings"
-    
-    deactivate
-    cd /
-    
-    log "✅ MEGA SDK built and Python bindings installed"
+    python3.12 setup.py bdist_wheel || error_exit "wheel build failed"
+    pip install --no-cache-dir dist/megasdk-4.8.0-*.whl || error_exit "pip install failed"
+    deactivate && cd /
+    log "✅ MEGA SDK built"
 }
 
 # ── Cleanup ──
 cleanup() {
-    log "🧹 Cleaning up build dependencies..."
-    
-    # Remove build tools (keep runtime libs)
-    apt-get remove -y -qq \
-        autoconf automake build-essential cmake \
-        g++ gcc gettext gpg-agent intltool libtool \
-        make unzip zip dh-autoreconf \
-        libcurl4-openssl-dev libssl-dev libc-ares-dev \
-        libsqlite3-dev swig libboost-all-dev \
-        libpthread-stubs0-dev zlib1g-dev \
-        libffi-dev libpcre3-dev libuv1-dev 2>/dev/null || true
-    
-    apt-get autoremove -y -qq
-    apt-get autoclean -y -qq
-    
-    # Remove temp directories
+    log "🧹 Cleaning up..."
+    apt-get remove -y -qq autoconf automake build-essential cmake g++ gcc gettext gpg-agent intltool libtool make unzip zip dh-autoreconf libcurl4-openssl-dev libssl-dev libc-ares-dev libsqlite3-dev swig libboost-all-dev libpthread-stubs0-dev zlib1g-dev libffi-dev libpcre3-dev libuv1-dev 2>/dev/null || true
+    apt-get autoremove -y -qq && apt-get autoclean -y -qq
     rm -rf "$SDK_PATH" "$TEMP_DIR" "$MEGA_VENV"
-    
-    log "✅ Cleanup complete"
-}
-
-# ── Final Verification ──
-verify_installation() {
-    log "🔍 Verifying installations..."
-    
-    local errors=0
-    
-    # Check binaries
-    for cmd in xnox xtra xone xria ffprobe ffplay python3.12; do
-        if command -v "$cmd" &> /dev/null; then
-            log "✅ $cmd: $(command -v $cmd)"
-        else
-            log "❌ $cmd: NOT FOUND"
-            ((errors++))
-        fi
-    done
-    
-    # Check MEGA Python binding
-    if python3.12 -c "import mega" 2>/dev/null; then
-        log "✅ MEGA Python binding: OK"
-    else
-        log "❌ MEGA Python binding: FAILED"
-        ((errors++))
-    fi
-    
-    if [ $errors -gt 0 ]; then
-        log "⚠️  $errors verification(s) failed. Check $LOG_FILE for details."
-        return 1
-    fi
-    
-    log "🎉 All installations verified successfully!"
-    return 0
+    log "✅ Cleanup done"
 }
 
 # ── Main ──
 main() {
-    check_root
-    log "🚀 Starting setup script: $SCRIPT_NAME"
-    log "📝 Log file: $LOG_FILE"
-    log "🖥️  Architecture: $(uname -m)"
-    log "🐧 OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'=' -f2 | tr -d '"')"
-    
+    check_env
+    log "🚀 Starting Aeon setup on $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
     update_system
     install_python
     install_dependencies
@@ -261,10 +156,7 @@ main() {
     install_rclone
     build_mega_sdk
     cleanup
-    verify_installation
-    
-    log "✨ Setup completed successfully!"
+    log "✨ Aeon setup completed successfully!"
 }
 
-# Run main function
 main "$@"

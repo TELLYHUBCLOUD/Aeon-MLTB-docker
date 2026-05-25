@@ -60,7 +60,9 @@ install_dependencies() {
         libpthread-stubs0-dev zlib1g-dev \
         pkg-config libffi-dev libpcre3-dev \
         libuv1-dev libmediainfo0v5 ca-certificates \
-        libarchive-tools
+        libarchive-tools \
+        python3-distutils python3.12-distutils \  # ✅ ADD THESE TWO LINES
+        python3-setuptools python3.12-setuptools   # ✅ AND THESE
     log "✅ Dependencies installed"
 }
 
@@ -161,17 +163,24 @@ build_mega_sdk() {
     cd "$SDK_PATH"
     rm -rf .git
     
-    # ✅ autoreconf with SIGPIPE tolerance
     autoreconf -fiv 2>/dev/null || true
     ./autogen.sh || error_exit "autogen.sh failed"
     
-    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples || \
-        error_exit "configure failed"
+    # ✅ FORCE Python 3.12 for configure
+    log "⚙️ Configuring MEGA SDK with Python 3.12..."
+    ./configure \
+        --disable-silent-rules \
+        --enable-python \
+        --with-sodium \
+        --disable-examples \
+        PYTHON=/usr/bin/python3.12 \
+        PYTHON_CFLAGS="-I/usr/include/python3.12" \
+        PYTHON_LIBS="-lpython3.12" || error_exit "configure failed"
     
     log "🔨 Compiling MEGA SDK (this may take 15-30 min)..."
     make -j$(nproc --all) || error_exit "make failed"
     
-    # ✅ Python venv setup
+    # ✅ Python venv setup with explicit python3.12
     python3.12 -m venv "$MEGA_VENV" || error_exit "venv creation failed"
     source "$MEGA_VENV/bin/activate"
     
@@ -185,7 +194,6 @@ build_mega_sdk() {
     cd /
     log "✅ MEGA SDK built & Python bindings installed"
 }
-
 # ── Cleanup ──
 cleanup() {
     log "🧹 Cleaning up build dependencies..."

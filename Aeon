@@ -13,11 +13,17 @@ readonly TEMP_DIR="/tmp/build_temp"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 error_exit() { log "❌ ERROR: $*"; exit 1; }
 
-# ── Root/Container Check ──
-check_env() {
-    if [ "$EUID" -ne 0 ]; then error_exit "Run as root"; fi
-    # Docker non-interactive fix
+# ── Docker/Container Optimizations ──
+setup_docker_env() {
     export DEBIAN_FRONTEND=noninteractive
+    export TERM=dumb  # Disable terminal-specific features
+    # Ignore SIGPIPE for child processes (Docker build safe)
+    trap '' PIPE 2>/dev/null || true
+}
+
+# ── Root Check ──
+check_root() {
+    if [ "$EUID" -ne 0 ]; then error_exit "Run as root"; fi
 }
 
 # ── Update system ──
@@ -33,7 +39,9 @@ install_python() {
     apt-get install -y -qq software-properties-common
     add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update -qq
-    apt-get install -y -qq python3.12 python3.12-dev python3.12-venv python3-pip libpython3.12-dev dh-autoreconf
+    apt-get install -y -qq \
+        python3.12 python3.12-dev python3.12-venv \
+        python3-pip libpython3.12-dev dh-autoreconf
     log "✅ Python 3.12 installed"
 }
 
@@ -41,26 +49,36 @@ install_python() {
 install_dependencies() {
     log "📦 Installing dependencies..."
     apt-get install -y --no-install-recommends -qq \
-        apt-utils aria2 curl zstd git libmagic-dev locales mediainfo neofetch \
-        p7zip-full p7zip-rar tzdata wget autoconf automake build-essential \
-        cmake g++ gcc gettext gpg-agent intltool libtool make unzip zip \
-        libcurl4-openssl-dev libsodium-dev libssl-dev libcrypto++-dev \
-        libc-ares-dev libsqlite3-dev libfreeimage-dev swig libboost-all-dev \
-        libpthread-stubs0-dev zlib1g-dev pkg-config libffi-dev libpcre3-dev \
-        libuv1-dev libmediainfo0v5 ca-certificates libarchive-tools
+        apt-utils aria2 curl zstd git libmagic-dev \
+        locales mediainfo neofetch p7zip-full \
+        p7zip-rar tzdata wget autoconf automake \
+        build-essential cmake g++ gcc gettext \
+        gpg-agent intltool libtool make unzip zip \
+        libcurl4-openssl-dev libsodium-dev libssl-dev \
+        libcrypto++-dev libc-ares-dev libsqlite3-dev \
+        libfreeimage-dev swig libboost-all-dev \
+        libpthread-stubs0-dev zlib1g-dev \
+        pkg-config libffi-dev libpcre3-dev \
+        libuv1-dev libmediainfo0v5 ca-certificates \
+        libarchive-tools
     log "✅ Dependencies installed"
 }
 
 # ── qbittorrent-nox → xnox ──
 install_qbittorrent() {
     log "🧲 Installing qbittorrent-nox (xnox)..."
-    ARCH=$(uname -m)
+    local ARCH=$(uname -m)
+    local URL=""
+    
     case "$ARCH" in
         x86_64) URL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/x86_64-qbittorrent-nox" ;;
         aarch64) URL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/aarch64-qbittorrent-nox" ;;
         *) error_exit "Unsupported arch: $ARCH" ;;
     esac
-    wget -q --show-progress -O /usr/bin/xnox "$URL" || error_exit "qbittorrent download failed"
+    
+    mkdir -p /usr/local/bin
+    # ✅ Docker-safe: disable progress bar, ignore SIGPIPE on write
+    wget -q --no-verbose -O /usr/bin/xnox "$URL" || error_exit "qbittorrent download failed"
     chmod 755 /usr/bin/xnox
     log "✅ xnox installed"
 }
@@ -69,18 +87,30 @@ install_qbittorrent() {
 install_ffmpeg() {
     log "🎬 Installing FFmpeg (xtra)..."
     mkdir -p "$TEMP_DIR" && cd "$TEMP_DIR"
-    ARCH=$(uname -m)
+    
+    local ARCH=$(uname -m)
+    local URL=""
+    
     case "$ARCH" in
         x86_64) URL="https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz" ;;
         aarch64) URL="https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz" ;;
         *) error_exit "Unsupported arch: $ARCH" ;;
     esac
-    wget -q --show-progress -O ffmpeg.tar.xz "$URL" || error_exit "FFmpeg download failed"
-    tar -xf ffmpeg.tar.xz
-    FF_DIR=$(tar -tf ffmpeg.tar.xz | head -1 | cut -d'/' -f1)
+    
+    # ✅ Docker-safe download: no progress bar, retry on network issues
+    wget -q --no-verbose --tries=3 -O ffmpeg.tar.xz "$URL" || error_exit "FFmpeg download failed"
+    
+    # ✅ Extract safely: use tar directly, avoid pipes that cause SIGPIPE
+    tar -xf ffmpeg.tar.xz || error_exit "FFmpeg extraction failed"
+    
+    local FF_DIR
+    FF_DIR=$(find . -maxdepth 1 -type d -name "ffmpeg-n7.1*" | head -1)
+    [ -z "$FF_DIR" ] && error_exit "FFmpeg directory not found"
+    
     mv "${FF_DIR}/bin/ffmpeg" /usr/bin/xtra
     mv "${FF_DIR}/bin/ffprobe" /usr/bin/ffprobe
     mv "${FF_DIR}/bin/ffplay" /usr/bin/ffplay
+    
     chmod +x /usr/bin/xtra /usr/bin/ffprobe /usr/bin/ffplay
     cd / && rm -rf "$TEMP_DIR"
     log "✅ xtra installed"
@@ -89,28 +119,34 @@ install_ffmpeg() {
 # ── rclone → xone | aria2c → xria ──
 install_rclone() {
     log "☁️ Installing rclone (xone) & aria2 (xria)..."
-    ARCH=$(uname -m)
+    local ARCH=$(uname -m)
+    local RCLONE_ARCH=""
+    
     case "$ARCH" in
         x86_64) RCLONE_ARCH="amd64" ;;
         aarch64) RCLONE_ARCH="arm64" ;;
         *) error_exit "Unsupported arch: $ARCH" ;;
     esac
     
-    # ✅ Docker-safe download with retry & explicit checks
+    # ✅ Direct download with retry, no pipe to bash
     curl -fsSL --retry 3 --retry-delay 2 \
         "https://downloads.rclone.org/rclone-current-linux-${RCLONE_ARCH}.zip" \
         -o /tmp/rclone.zip || error_exit "rclone download failed"
-        
+    
     [ ! -s /tmp/rclone.zip ] && error_exit "rclone zip is empty"
     
     unzip -q -o /tmp/rclone.zip -d /tmp/ || error_exit "rclone extraction failed"
-    RCLONE_DIR=$(ls -d /tmp/rclone-*-linux-${RCLONE_ARCH} 2>/dev/null)
-    [ -z "$RCLONE_DIR" ] && error_exit "rclone dir not found after extraction"
+    
+    local RCLONE_DIR
+    RCLONE_DIR=$(find /tmp -maxdepth 1 -type d -name "rclone-*-linux-${RCLONE_ARCH}" | head -1)
+    [ -z "$RCLONE_DIR" ] && error_exit "rclone directory not found"
     
     cp "${RCLONE_DIR}/rclone" /usr/bin/xone
     chmod 755 /usr/bin/xone
+    
     rm -rf /tmp/rclone.zip /tmp/rclone-*-linux-*
     
+    # Rename aria2c if exists
     [ -f /usr/bin/aria2c ] && mv /usr/bin/aria2c /usr/bin/xria
     log "✅ xone & xria installed"
 }
@@ -118,36 +154,65 @@ install_rclone() {
 # ── MEGA SDK v4.8.0 ──
 build_mega_sdk() {
     log "🔐 Building MEGA SDK v4.8.0..."
-    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 "$SDK_PATH" 2>/dev/null || error_exit "SDK clone failed"
-    cd "$SDK_PATH" && rm -rf .git
     
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 "$SDK_PATH" 2>/dev/null || \
+        error_exit "SDK clone failed"
+    
+    cd "$SDK_PATH"
+    rm -rf .git
+    
+    # ✅ autoreconf with SIGPIPE tolerance
     autoreconf -fiv 2>/dev/null || true
-    ./autogen.sh || error_exit "autogen failed"
-    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples || error_exit "configure failed"
+    ./autogen.sh || error_exit "autogen.sh failed"
+    
+    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples || \
+        error_exit "configure failed"
+    
+    log "🔨 Compiling MEGA SDK (this may take 15-30 min)..."
     make -j$(nproc --all) || error_exit "make failed"
     
+    # ✅ Python venv setup
     python3.12 -m venv "$MEGA_VENV" || error_exit "venv creation failed"
     source "$MEGA_VENV/bin/activate"
+    
     cd bindings/python/
     python3.12 setup.py bdist_wheel || error_exit "wheel build failed"
-    pip install --no-cache-dir dist/megasdk-4.8.0-*.whl || error_exit "pip install failed"
-    deactivate && cd /
-    log "✅ MEGA SDK built"
+    
+    pip install --no-cache-dir dist/megasdk-4.8.0-*.whl || \
+        error_exit "pip install failed"
+    
+    deactivate
+    cd /
+    log "✅ MEGA SDK built & Python bindings installed"
 }
 
 # ── Cleanup ──
 cleanup() {
-    log "🧹 Cleaning up..."
-    apt-get remove -y -qq autoconf automake build-essential cmake g++ gcc gettext gpg-agent intltool libtool make unzip zip dh-autoreconf libcurl4-openssl-dev libssl-dev libc-ares-dev libsqlite3-dev swig libboost-all-dev libpthread-stubs0-dev zlib1g-dev libffi-dev libpcre3-dev libuv1-dev 2>/dev/null || true
-    apt-get autoremove -y -qq && apt-get autoclean -y -qq
+    log "🧹 Cleaning up build dependencies..."
+    
+    apt-get remove -y -qq \
+        autoconf automake build-essential cmake \
+        g++ gcc gettext gpg-agent intltool libtool \
+        make unzip zip dh-autoreconf \
+        libcurl4-openssl-dev libssl-dev libc-ares-dev \
+        libsqlite3-dev swig libboost-all-dev \
+        libpthread-stubs0-dev zlib1g-dev \
+        libffi-dev libpcre3-dev libuv1-dev 2>/dev/null || true
+    
+    apt-get autoremove -y -qq
+    apt-get autoclean -y -qq
+    
     rm -rf "$SDK_PATH" "$TEMP_DIR" "$MEGA_VENV"
-    log "✅ Cleanup done"
+    log "✅ Cleanup complete"
 }
 
 # ── Main ──
 main() {
-    check_env
-    log "🚀 Starting Aeon setup on $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
+    check_root
+    setup_docker_env
+    log "🚀 Starting Aeon setup in Docker"
+    log "🖥️  Arch: $(uname -m) | OS: $(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)"
+    
     update_system
     install_python
     install_dependencies
@@ -156,6 +221,7 @@ main() {
     install_rclone
     build_mega_sdk
     cleanup
+    
     log "✨ Aeon setup completed successfully!"
 }
 

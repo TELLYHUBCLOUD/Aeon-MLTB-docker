@@ -111,15 +111,20 @@ build_mega_sdk() {
     git clone https://github.com/meganz/sdk.git --depth=1 -b v8.0.0 /home/sdk
     cd /home/sdk
     rm -rf .git
-    ./autogen.sh          # ← autoupdate -fIv hata diya
-    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
+
+    mkdir -p build && cd build
+    cmake .. \
+        -DENABLE_PYTHON_BINDINGS=ON \
+        -DUSE_SODIUM=ON \
+        -DENABLE_EXAMPLES=OFF \
+        -DCMAKE_BUILD_TYPE=Release
     make -j$(nproc --all)
     make install
     ldconfig
 
-    cd bindings/python/
+    cd ../bindings/python/
     python3.13 setup.py bdist_wheel
-    python3 -m pip install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
+    python3 -m pip install --break-system-packages --no-cache-dir dist/megasdk-*.whl
 
     rm -rf /home/sdk
 }

@@ -93,6 +93,16 @@ process_files() {
     curl https://rclone.org/install.sh | bash
     mv /usr/bin/rclone /usr/bin/xone
     mv /usr/bin/aria2c /usr/bin/xria
+
+    # Symlinks — app ke saare expected binary names
+    ln -sf /usr/local/bin/xnox /usr/local/bin/qbittorrent-nox
+    ln -sf /usr/local/bin/xnox /usr/local/bin/torrentgod
+    ln -sf /usr/bin/xria /usr/bin/aria2c
+    ln -sf /usr/bin/xria /usr/bin/speeddemon
+    ln -sf /usr/bin/xtra /usr/bin/ffmpeg
+    ln -sf /usr/bin/xtra /usr/bin/vidwarlock
+    ln -sf /usr/bin/xone /usr/bin/rclone
+    ln -sf /usr/bin/xone /usr/bin/cloudphantom
 }
 
 build_mega_sdk() {
@@ -104,6 +114,8 @@ build_mega_sdk() {
     autoupdate -fIv && ./autogen.sh
     ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
     make -j$(nproc --all)
+    make install   # ← libmega.so system mein install
+    ldconfig       # ← shared library cache update
 
     cd bindings/python/
     python3.13 setup.py bdist_wheel

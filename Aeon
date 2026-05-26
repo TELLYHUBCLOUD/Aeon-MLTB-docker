@@ -35,6 +35,8 @@ install_packages() {
         libpython3.13 \
         libpython3.13-dev \
         python3.13-dev \
+        libmediainfo-dev \
+        libzen-dev \
         aria2 \
         curl \
         zstd \

@@ -29,6 +29,7 @@ install_packages() {
     apt-get update
     apt-get upgrade -y
     apt-get install -y --no-install-recommends \
+        python3-pip \
         python3.13 \
         python3-setuptools \
         libpython3.13 \
@@ -95,8 +96,7 @@ process_files() {
 }
 
 build_mega_sdk() {
-    # distutils shim for Python 3.13
-    pip3 install --break-system-packages setuptools
+    python3 -m pip install --break-system-packages setuptools
 
     git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
     cd /home/sdk
@@ -107,7 +107,7 @@ build_mega_sdk() {
 
     cd bindings/python/
     python3.13 setup.py bdist_wheel
-    pip3 install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
+    python3 -m pip install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
 
     rm -rf /home/sdk
 }

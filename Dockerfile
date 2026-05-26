@@ -40,7 +40,8 @@ RUN git clone --depth 1 --branch v8.1.1 https://github.com/meganz/sdk.git /tmp/s
         -DUSE_FREEIMAGE=OFF \
         -DUSE_FFMPEG=OFF \
         -DUSE_MEDIAINFO=OFF \
-        -DUSE_PDFIUM=OFF && \
+        -DUSE_PDFIUM=OFF \
+        -DUSE_READLINE=OFF && \
     cmake --build /tmp/sdk/build -j$(nproc) && \
     cmake --install /tmp/sdk/build && \
     ldconfig && \

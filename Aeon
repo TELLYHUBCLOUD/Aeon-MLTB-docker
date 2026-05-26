@@ -108,14 +108,14 @@ process_files() {
 build_mega_sdk() {
     python3 -m pip install --break-system-packages setuptools
 
-    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v8.0.0 /home/sdk
     cd /home/sdk
     rm -rf .git
-    autoupdate -fIv && ./autogen.sh
+    ./autogen.sh          # ← autoupdate -fIv hata diya
     ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
     make -j$(nproc --all)
-    make install   # ← libmega.so system mein install
-    ldconfig       # ← shared library cache update
+    make install
+    ldconfig
 
     cd bindings/python/
     python3.13 setup.py bdist_wheel
@@ -142,12 +142,12 @@ cleanup() {
         make \
         swig \
         libcurl4-openssl-dev \
-        libssl-dev \
         libc-ares-dev \
         libsqlite3-dev \
         libboost-all-dev \
         libpthread-stubs0-dev \
         zlib1g-dev
+        # libssl-dev NAHI hatana — runtime mein chahiye
 
     apt-get install -y --no-install-recommends \
         git \

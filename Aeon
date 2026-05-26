@@ -30,6 +30,7 @@ install_packages() {
     apt-get upgrade -y
     apt-get install -y --no-install-recommends \
         python3.13 \
+        python3-setuptools \
         libpython3.13 \
         libpython3.13-dev \
         python3.13-dev \
@@ -94,6 +95,9 @@ process_files() {
 }
 
 build_mega_sdk() {
+    # distutils shim for Python 3.13
+    pip3 install --break-system-packages setuptools
+
     git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
     cd /home/sdk
     rm -rf .git

@@ -29,7 +29,7 @@ COPY requirements.txt /tmp/requirements.txt
 RUN uv pip install --system --no-cache-dir -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
-RUN git clone --depth 1 --branch v4.8.0 https://github.com/meganz/sdk.git /tmp/sdk && \
+RUN git clone --depth 1 --branch v8.1.1 https://github.com/meganz/sdk.git /tmp/sdk && \
     cd /tmp/sdk && \
     ./autogen.sh && \
     ./configure --enable-python --with-sodium --disable-examples && \

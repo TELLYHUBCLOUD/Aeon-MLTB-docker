@@ -9,25 +9,39 @@ BIN_DIR="/usr/local/bin"
 download_files() {
     mkdir -p "$JDOWNLOADER_HOME" "$BIN_DIR"
     local arch=$(uname -m)
+    local pids=()
 
     if [ "$arch" = "x86_64" ]; then
         wget -qO "$BIN_DIR/xnox" "https://github.com/userdocs/qbittorrent-nox-static/releases/latest/download/x86_64-qbittorrent-nox" &
+        pids+=($!)
         wget -qO "$TEMP_DIR/ffmpeg.tar.xz" "https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz" &
+        pids+=($!)
         wget -qO "$TEMP_DIR/uv.tar.gz" "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-unknown-linux-gnu.tar.gz" &
+        pids+=($!)
     else
         wget -qO "$BIN_DIR/xnox" "https://github.com/userdocs/qbittorrent-nox-static/releases/latest/download/aarch64-qbittorrent-nox" &
-        wget -qO "$TEMP_DIR/ffmpeg.tar.xz" "https://github.com/5hojib/FFmpeg-Builds/releases/latest/download/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz" &
+        pids+=($!)
+        wget -qO "$TEMP_DIR/ffmpeg.tar.xz" "https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz" &
+        pids+=($!)
         wget -qO "$TEMP_DIR/uv.tar.gz" "https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-unknown-linux-gnu.tar.gz" &
+        pids+=($!)
     fi
 
     wget -qO "$JDOWNLOADER_HOME/JDownloader.jar" http://installer.jdownloader.org/JDownloader.jar &
+    pids+=($!)
 
-    wait
+    # Wait for all background downloads individually to catch failures with set -e
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            echo "ERROR: Download failed for PID $pid" >&2
+            exit 1
+        fi
+    done
 }
 
 install_packages() {
     apt-get update
-    apt-get upgrade -y
+    # Removed 'apt-get upgrade -y' to ensure reproducible builds
     apt-get install -y --no-install-recommends \
         python3-pip \
         python3.13 \
@@ -45,7 +59,6 @@ install_packages() {
         p7zip-rar \
         tzdata \
         wget \
-        openjdk-21-jre \
         openjdk-21-jre-headless \
         autoconf \
         automake \
@@ -74,11 +87,15 @@ install_packages() {
 }
 
 process_files() {
-    chmod 700 "$BIN_DIR/xnox"
+    chmod 755 "$BIN_DIR/xnox"  # Changed from 700 to 755 for non-root compatibility
 
     # Extract FFmpeg
     tar -xf "$TEMP_DIR/ffmpeg.tar.xz" -C "$TEMP_DIR"
     local ffmpeg_dir=$(find "$TEMP_DIR" -type d -name "ffmpeg-n7.1-latest-linux*" | head -n 1)
+    if [ -z "$ffmpeg_dir" ]; then
+        echo "ERROR: FFmpeg directory not found after extraction" >&2
+        exit 1
+    fi
     mv "$ffmpeg_dir/bin/ffmpeg" /usr/bin/xtra
     mv "$ffmpeg_dir/bin/ffprobe" /usr/bin/ffprobe
     mv "$ffmpeg_dir/bin/ffplay" /usr/bin/ffplay
@@ -86,13 +103,22 @@ process_files() {
 
     # Extract UV
     tar -xzf "$TEMP_DIR/uv.tar.gz" -C "$TEMP_DIR"
-    mv "$(find "$TEMP_DIR" -type f -name "uv" | head -n 1)" /usr/bin/uv
+    local uv_bin=$(find "$TEMP_DIR" -type f -name "uv" | head -n 1)
+    if [ -z "$uv_bin" ]; then
+        echo "ERROR: UV binary not found after extraction" >&2
+        exit 1
+    fi
+    mv "$uv_bin" /usr/bin/uv
     chmod +x /usr/bin/uv
 
-    # Install rclone
-    curl https://rclone.org/install.sh | bash
-    mv /usr/bin/rclone /usr/bin/xone
-    mv /usr/bin/aria2c /usr/bin/xria
+    # Install rclone safely (download script first, then execute)
+    curl -o /tmp/rclone-install.sh https://rclone.org/install.sh
+    bash /tmp/rclone-install.sh
+    rm -f /tmp/rclone-install.sh
+
+    # Symlinks instead of 'mv' to avoid breaking apt package manager
+    ln -sf /usr/bin/aria2c /usr/bin/xria
+    ln -sf /usr/bin/rclone /usr/bin/xone
 
     # Symlinks — app ke saare expected binary names
     ln -sf /usr/local/bin/xnox /usr/local/bin/qbittorrent-nox
@@ -111,7 +137,10 @@ build_mega_sdk() {
     git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
     cd /home/sdk
     rm -rf .git
-    autoupdate -fIv && ./autogen.sh
+    
+    # Fixed: autoupdate is wrong tool, use the repo's autogen script
+    ./autogen.sh
+    
     ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
     make -j$(nproc --all)
     make install   # ← libmega.so system mein install
@@ -125,11 +154,10 @@ build_mega_sdk() {
 }
 
 cleanup() {
+    # Removed perl/perl-modules from purge list to prevent breaking git
     apt-get purge -y \
         wget \
-        perl \
         xz-utils \
-        perl-modules-5.40 \
         autoconf \
         automake \
         build-essential \
@@ -149,10 +177,8 @@ cleanup() {
         libpthread-stubs0-dev \
         zlib1g-dev
 
-    apt-get install -y --no-install-recommends \
-        git \
-        curl \
-        cpulimit
+    # Only cpulimit needs adding; git and curl are already intact
+    apt-get install -y --no-install-recommends cpulimit
 
     apt-get autoremove -y --purge
     apt-get autoclean -y

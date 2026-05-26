@@ -153,6 +153,16 @@ build_mega_sdk() {
     rm -rf /home/sdk
 }
 
+install_python_requirements() {
+    if [ -f /tmp/requirements.txt ]; then
+        echo "Installing Python requirements with uv..."
+        uv pip install --system --no-cache-dir -r /tmp/requirements.txt
+        rm /tmp/requirements.txt
+    else
+        echo "WARNING: /tmp/requirements.txt not found, skipping Python package installation" >&2
+    fi
+}
+
 cleanup() {
     # Removed perl/perl-modules from purge list to prevent breaking git
     apt-get purge -y \
@@ -199,6 +209,7 @@ main() {
     download_files
     process_files
     build_mega_sdk
+    install_python_requirements
     cleanup
 }
 

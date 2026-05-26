@@ -1,5 +1,5 @@
 #!/bin/bash
-# Aeon
+# Aeon - Optimized & Robust Docker Build Script
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 TEMP_DIR=$(mktemp -d)
@@ -7,6 +7,7 @@ JDOWNLOADER_HOME="/JDownloader"
 BIN_DIR="/usr/local/bin"
 
 download_files() {
+    echo "Downloading system binaries..."
     mkdir -p "$JDOWNLOADER_HOME" "$BIN_DIR"
     local arch=$(uname -m)
     local pids=()
@@ -27,10 +28,10 @@ download_files() {
         pids+=($!)
     fi
 
-    wget -qO "$JDOWNLOADER_HOME/JDownloader.jar" http://installer.jdownloader.org/JDownloader.jar &
+    wget -qO "$JDOWNLOADER_HOME/JDownloader.jar" "http://installer.jdownloader.org/JDownloader.jar" &
     pids+=($!)
 
-    # Wait for all background downloads individually to catch failures with set -e
+    # Wait for all background downloads individually to catch failures
     for pid in "${pids[@]}"; do
         if ! wait "$pid"; then
             echo "ERROR: Download failed for PID $pid" >&2
@@ -40,21 +41,21 @@ download_files() {
 }
 
 install_packages() {
+    echo "Installing system packages and build dependencies..."
     apt-get update
-    # Removed 'apt-get upgrade -y' to ensure reproducible builds
     apt-get install -y --no-install-recommends \
         python3-pip \
-        python3.13 \
         python3-setuptools \
-        libpython3.13 \
-        libpython3.13-dev \
-        python3.13-dev \
+        python3-dev \
         aria2 \
         curl \
         zstd \
         xz-utils \
         git \
+        unzip \
+        libmagic1 \
         libmagic-dev \
+        libglib2.0-0 \
         p7zip-full \
         p7zip-rar \
         tzdata \
@@ -82,12 +83,15 @@ install_packages() {
         libpthread-stubs0-dev \
         zlib1g-dev
 
-    ln -sf /usr/bin/python3.13 /usr/bin/python3
-    ln -sf /usr/bin/python3.13 /usr/bin/python
+    # Ensure dynamic links for python commands
+    if ! command -v python &>/dev/null; then
+        ln -sf "$(which python3)" /usr/bin/python
+    fi
 }
 
 process_files() {
-    chmod 755 "$BIN_DIR/xnox"  # Changed from 700 to 755 for non-root compatibility
+    echo "Extracting and placing binaries..."
+    chmod 755 "$BIN_DIR/xnox"
 
     # Extract FFmpeg
     tar -xf "$TEMP_DIR/ffmpeg.tar.xz" -C "$TEMP_DIR"
@@ -117,14 +121,13 @@ process_files() {
     rm -f /tmp/rclone-install.sh
 
     # Symlinks for apt-managed binaries (aria2c, rclone)
-    # We link the aliases directly to the real apt binaries to avoid circular links and breaking dpkg
     ln -sf /usr/bin/aria2c /usr/bin/xria
     ln -sf /usr/bin/aria2c /usr/bin/speeddemon
     
     ln -sf /usr/bin/rclone /usr/bin/xone
     ln -sf /usr/bin/rclone /usr/bin/cloudphantom
 
-    # Symlinks for manually placed binaries
+    # Symlinks for manually placed binaries (matching bot's BinConfig)
     ln -sf /usr/local/bin/xnox /usr/local/bin/qbittorrent-nox
     ln -sf /usr/local/bin/xnox /usr/local/bin/torrentgod
     ln -sf /usr/bin/xtra /usr/bin/ffmpeg
@@ -132,23 +135,30 @@ process_files() {
 }
 
 build_mega_sdk() {
-    python3 -m pip install --break-system-packages setuptools
+    echo "Building Mega SDK and Python bindings..."
+    # Ensure setuptools and wheel are installed in system Python
+    uv pip install --system --no-cache-dir setuptools wheel
 
     git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
     cd /home/sdk
     rm -rf .git
     
-    # Fixed: autoupdate is wrong tool, use the repo's autogen script
     ./autogen.sh
-    
     ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
-    make -j$(nproc --all)
-    make install   # ← libmega.so system mein install
-    ldconfig       # ← shared library cache update
+    
+    # Cap CPU cores to 4 during build to prevent Out-Of-Memory compilation crashes
+    local cores=$(nproc)
+    if [ "$cores" -gt 4 ]; then
+        cores=4
+    fi
+    echo "Compiling on $cores cores..."
+    make -j"$cores"
+    make install
+    ldconfig
 
     cd bindings/python/
-    python3.13 setup.py bdist_wheel
-    python3 -m pip install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
+    python3 setup.py bdist_wheel
+    uv pip install --system --no-cache-dir dist/megasdk-*.whl
 
     rm -rf /home/sdk
 }
@@ -164,10 +174,10 @@ install_python_requirements() {
 }
 
 cleanup() {
-    # Removed perl/perl-modules from purge list to prevent breaking git
+    echo "Cleaning up build dependencies..."
+    # Purge only compilers and code generation build tools
+    # Crucially do NOT purge the dev libraries (e.g. libc-ares-dev) so their runtime counterparts are safe from autoremove
     apt-get purge -y \
-        wget \
-        xz-utils \
         autoconf \
         automake \
         build-essential \
@@ -178,22 +188,17 @@ cleanup() {
         intltool \
         libtool \
         make \
-        swig \
-        libcurl4-openssl-dev \
-        libssl-dev \
-        libc-ares-dev \
-        libsqlite3-dev \
-        libboost-all-dev \
-        libpthread-stubs0-dev \
-        zlib1g-dev
+        swig
 
-    # Only cpulimit needs adding; git and curl are already intact
+    # Install cpulimit for runtime CPU throttling
     apt-get install -y --no-install-recommends cpulimit
 
+    # Clean up apt caches
     apt-get autoremove -y --purge
     apt-get autoclean -y
     apt-get clean -y
 
+    # Clear temporary build dirs
     rm -rf \
         /var/lib/apt/lists/* \
         "$TEMP_DIR" \
@@ -211,6 +216,7 @@ main() {
     build_mega_sdk
     install_python_requirements
     cleanup
+    echo "Installation finished successfully!"
 }
 
 main

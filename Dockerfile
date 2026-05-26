@@ -30,14 +30,20 @@ RUN uv pip install --system --no-cache-dir -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
 RUN git clone --depth 1 --branch v8.1.1 https://github.com/meganz/sdk.git /tmp/sdk && \
-    cd /tmp/sdk && \
-    ./autogen.sh && \
-    ./configure --enable-python --with-sodium --disable-examples && \
-    make -j$(nproc) && \
-    make install && \
+    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install wheel setuptools && \
+    cmake -S /tmp/sdk -B /tmp/sdk/build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_PYTHON_BINDINGS=ON \
+        -DENABLE_SDKLIB_EXAMPLES=OFF \
+        -DENABLE_SDKLIB_TESTS=OFF \
+        -DUSE_FREEIMAGE=OFF \
+        -DUSE_FFMPEG=OFF \
+        -DUSE_MEDIAINFO=OFF \
+        -DUSE_PDFIUM=OFF && \
+    cmake --build /tmp/sdk/build -j$(nproc) && \
+    cmake --install /tmp/sdk/build && \
     ldconfig && \
-    cd bindings/python && \
-    python3 setup.py install && \
+    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install /tmp/sdk/build/bindings/python/dist/*.whl && \
     cd / && \
     rm -rf /tmp/sdk && \
     apt-get purge -y autoconf automake libtool swig cmake && \

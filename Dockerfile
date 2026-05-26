@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LD_LIBRARY_PATH="/usr/local/lib"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc g++ make python3-dev libc6-dev git curl wget unzip p7zip-full tar ffmpeg mediainfo aria2 qbittorrent-nox openjdk-17-jre-headless cpulimit util-linux procps autoconf automake libtool pkg-config swig cmake libffi-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev libsodium-dev libfreeimage-dev libpcre3-dev libcrypto++-dev zlib1g-dev libuv1-dev libc-ares-dev libmagic1 libmediainfo0v5 ca-certificates \
+    build-essential gcc g++ make python3-dev libc6-dev git curl wget unzip p7zip-full tar ffmpeg mediainfo aria2 qbittorrent-nox openjdk-17-jre-headless cpulimit util-linux procps autoconf automake libtool pkg-config swig cmake libffi-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev libsodium-dev libfreeimage-dev libpcre3-dev libcrypto++-dev zlib1g-dev libuv1-dev libc-ares-dev libmagic1 libmediainfo0v5 ca-certificates libicu-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -26,6 +26,7 @@ RUN ln -sf /usr/bin/qbittorrent-nox /usr/local/bin/torrentgod && \
 RUN uv pip install --system cython setuptools wheel
 
 COPY requirements.txt /tmp/requirements.txt
+
 RUN uv pip install --system --no-cache-dir -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 

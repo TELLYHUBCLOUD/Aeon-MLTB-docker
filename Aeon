@@ -28,13 +28,14 @@ download_files() {
 install_packages() {
     apt-get update
     apt-get upgrade -y
+
     apt-get install -y --no-install-recommends \
         python3-pip \
-        python3.13 \
+        python3.12 \
         python3-setuptools \
-        libpython3.13 \
-        libpython3.13-dev \
-        python3.13-dev \
+        libpython3.12 \
+        libpython3.12-dev \
+        python3.12-dev \
         libmediainfo-dev \
         libzen-dev \
         aria2 \
@@ -60,7 +61,7 @@ install_packages() {
         libtool \
         make \
         swig \
-        libcurl4-openssl-dev \
+        libcurl4-gnutls-dev \
         libsodium-dev \
         libssl-dev \
         libcrypto++-dev \
@@ -69,10 +70,11 @@ install_packages() {
         libfreeimage-dev \
         libboost-all-dev \
         libpthread-stubs0-dev \
-        zlib1g-dev
+        zlib1g-dev \
+        ca-certificates
 
-    ln -sf /usr/bin/python3.13 /usr/bin/python3
-    ln -sf /usr/bin/python3.13 /usr/bin/python
+    ln -sf /usr/bin/python3.12 /usr/bin/python3
+    ln -sf /usr/bin/python3.12 /usr/bin/python
 }
 
 process_files() {

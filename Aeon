@@ -111,24 +111,24 @@ process_files() {
     mv "$uv_bin" /usr/bin/uv
     chmod +x /usr/bin/uv
 
-    # Install rclone safely (download script first, then execute)
+    # Install rclone safely
     curl -o /tmp/rclone-install.sh https://rclone.org/install.sh
     bash /tmp/rclone-install.sh
     rm -f /tmp/rclone-install.sh
 
-    # Symlinks instead of 'mv' to avoid breaking apt package manager
+    # Symlinks for apt-managed binaries (aria2c, rclone)
+    # We link the aliases directly to the real apt binaries to avoid circular links and breaking dpkg
     ln -sf /usr/bin/aria2c /usr/bin/xria
+    ln -sf /usr/bin/aria2c /usr/bin/speeddemon
+    
     ln -sf /usr/bin/rclone /usr/bin/xone
+    ln -sf /usr/bin/rclone /usr/bin/cloudphantom
 
-    # Symlinks — app ke saare expected binary names
+    # Symlinks for manually placed binaries
     ln -sf /usr/local/bin/xnox /usr/local/bin/qbittorrent-nox
     ln -sf /usr/local/bin/xnox /usr/local/bin/torrentgod
-    ln -sf /usr/bin/xria /usr/bin/aria2c
-    ln -sf /usr/bin/xria /usr/bin/speeddemon
     ln -sf /usr/bin/xtra /usr/bin/ffmpeg
     ln -sf /usr/bin/xtra /usr/bin/vidwarlock
-    ln -sf /usr/bin/xone /usr/bin/rclone
-    ln -sf /usr/bin/xone /usr/bin/cloudphantom
 }
 
 build_mega_sdk() {

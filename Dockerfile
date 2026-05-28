@@ -6,23 +6,26 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LD_LIBRARY_PATH="/usr/local/lib"
 
 # ── System packages ──────────────────────────────────────────────────────────
-# NOTE: ffmpeg & qbittorrent-nox intentionally excluded — installed as static
-#       binaries below to get the exact required versions (7.1.1 & 5.2.0).
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc g++ make python3-dev libc6-dev \
-    git curl wget unzip tar xz-utils zstd \
-    aria2 \
-    mediainfo \
-    openjdk-21-jre-headless \
-    cpulimit util-linux procps \
-    autoconf automake libtool pkg-config swig cmake \
-    libffi-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
-    libsodium-dev libfreeimage-dev libpcre3-dev libcrypto++-dev \
-    libboost-all-dev zlib1g-dev libuv1-dev libc-ares-dev \
-    libmagic1 libmediainfo0v5 \
-    ca-certificates \
+RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
+        > /etc/apt/sources.list.d/backports.list && \
+    apt-get update && \
+    # OpenJDK 21 only available via backports on Debian Bookworm
+    apt-get install -y -t bookworm-backports --no-install-recommends \
+        openjdk-21-jre-headless && \
+    apt-get install -y --no-install-recommends \
+        build-essential gcc g++ make python3-dev libc6-dev \
+        git curl wget unzip tar xz-utils zstd \
+        aria2 \
+        mediainfo \
+        cpulimit util-linux procps \
+        autoconf automake libtool pkg-config swig cmake \
+        libffi-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
+        libsodium-dev libfreeimage-dev libpcre3-dev libcrypto++-dev \
+        libboost-all-dev zlib1g-dev libuv1-dev libc-ares-dev \
+        libmagic1 libmediainfo0v5 \
+        ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
+    
 # ── uv ───────────────────────────────────────────────────────────────────────
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 

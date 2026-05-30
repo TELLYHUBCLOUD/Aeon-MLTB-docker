@@ -1,34 +1,52 @@
 #!/bin/bash
 
+# Set environment variables
+export DEBIAN_FRONTEND=noninteractive
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+export PIP_BREAK_SYSTEM_PACKAGES=1
+export LD_LIBRARY_PATH="/usr/local/lib"
+
 # Update and upgrade system packages
 update_system() {
+    echo "Updating system packages..."
     apt-get update && apt-get upgrade -y
 }
 
 # Install Python 3.13 and essential dependencies
 install_python() {
+    echo "Installing Python 3.13..."
     apt-get install -y software-properties-common
     add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update
     apt-get install -y python3.13 python3.13-dev python3.13-venv python3-pip libpython3.13 libpython3.13-dev
+    
+    # Set Python 3.13 as default
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
+    update-alternatives --set python3 /usr/bin/python3.13
 }
 
-# Install additional system dependencies
+# Install all system dependencies (combined from both scripts)
 install_dependencies() {
+    echo "Installing system dependencies..."
     apt-get install -y --no-install-recommends \
-        apt-utils aria2 curl zstd git libmagic-dev \
-        locales mediainfo neofetch p7zip-full \
+        apt-utils aria2 curl zstd git libmagic-dev libmagic1 \
+        locales mediainfo libmediainfo0v5 neofetch p7zip-full \
         p7zip-rar tzdata wget autoconf automake \
         build-essential cmake g++ gcc gettext \
-        gpg-agent intltool libtool make unzip zip \
+        gpg-agent intltool libtool make unzip zip tar \
         libcurl4-openssl-dev libsodium-dev libssl-dev \
         libcrypto++-dev libc-ares-dev libsqlite3-dev \
         libfreeimage-dev swig libboost-all-dev \
-        libpthread-stubs0-dev zlib1g-dev
+        libpthread-stubs0-dev zlib1g-dev libffi-dev \
+        libpcre3-dev libuv1-dev pkg-config \
+        ca-certificates openjdk-17-jre-headless \
+        cpulimit util-linux procps
 }
 
 # Download and install qbittorrent-nox based on system architecture
 install_qbittorrent() {
+    echo "Installing qBittorrent-nox..."
     ARCH=$(uname -m)
     mkdir -p /usr/local/bin
 
@@ -46,10 +64,12 @@ install_qbittorrent() {
     esac
 
     chmod 700 /usr/local/bin/xnox
+    ln -sf /usr/local/bin/xnox /usr/local/bin/torrentgod
 }
 
 # Install FFmpeg based on system architecture
 install_ffmpeg() {
+    echo "Installing FFmpeg..."
     ARCH=$(uname -m)
     mkdir -p /Temp
     cd /Temp
@@ -73,64 +93,158 @@ install_ffmpeg() {
     mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffprobe /usr/bin/ffprobe
     mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffplay /usr/bin/ffplay
     chmod +x /usr/bin/xtra /usr/bin/ffprobe /usr/bin/ffplay
+    
+    # Create symlinks
+    ln -sf /usr/bin/xtra /usr/local/bin/vidwarlock
 }
 
-# Install rclone and rename binaries
+# Install rclone and create symlinks
 install_rclone() {
+    echo "Installing rclone..."
     curl https://rclone.org/install.sh | bash
     mv /usr/bin/rclone /usr/bin/xone
     mv /usr/bin/aria2c /usr/bin/xria
+    
+    # Create additional symlinks
+    ln -sf /usr/bin/xone /usr/local/bin/cloudphantom
+    ln -sf /usr/bin/xria /usr/local/bin/speeddemon
 }
 
-# Install Python packages
+# Install UV (Python package installer)
+install_uv() {
+    echo "Installing UV..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="/root/.cargo/bin:$PATH"
+    
+    # Install uv pip packages
+    uv pip install --system cython setuptools wheel
+}
+
+# Install JDownloader
+install_jdownloader() {
+    echo "Installing JDownloader..."
+    mkdir -p /JDownloader/cfg
+    wget -O /JDownloader/JDownloader.jar http://installer.jdownloader.org/JDownloader.jar
+}
+
+# Install Python packages from requirements or default list
 install_python_packages() {
-    pip3 install --break-system-packages --ignore-installed --no-cache-dir -U \
-        aiohttp aiofiles aioshutil anytree==2.8.0 apscheduler aria2p asyncio \
-        beautifulsoup4 bencoding cinemagoer cloudscraper dnspython electrogram feedparser flask gevent \
-        google-api-python-client google-auth-httplib2 google-auth-oauthlib \
-        gunicorn httpx langcodes lxml motor mutagen markdown natsort pillow psutil \
-        pybase64 pycountry python-dotenv pyshorteners python-magic qbittorrent-api requests \
-        setuptools speedtest-cli telegraph tenacity uv uvloop xattr yt-dlp[default]
+    echo "Installing Python packages..."
+    
+    # Check if requirements.txt exists
+    if [ -f "/tmp/requirements.txt" ] || [ -f "requirements.txt" ]; then
+        REQ_FILE="/tmp/requirements.txt"
+        [ ! -f "$REQ_FILE" ] && REQ_FILE="requirements.txt"
+        
+        echo "Installing from requirements.txt..."
+        uv pip install --system --no-cache-dir -r "$REQ_FILE"
+    else
+        echo "Installing default packages..."
+        pip3 install --break-system-packages --ignore-installed --no-cache-dir -U \
+            aiohttp aiofiles aioshutil anytree==2.8.0 apscheduler aria2p asyncio \
+            beautifulsoup4 bencoding cinemagoer cloudscraper dnspython electrogram feedparser flask gevent \
+            google-api-python-client google-auth-httplib2 google-auth-oauthlib \
+            gunicorn httpx langcodes lxml motor mutagen markdown natsort pillow psutil \
+            pybase64 pycountry python-dotenv pyshorteners python-magic qbittorrent-api requests \
+            setuptools speedtest-cli telegraph tenacity uv uvloop xattr yt-dlp[default]
+    fi
 }
 
-# Clone and build MEGA SDK 8.1.1
+# Clone and build MEGA SDK (v4.8.0)
 build_mega_sdk() {
-    git clone https://github.com/meganz/sdk.git --depth=1 -b v8.1.1 /home/sdk
-    cd /home/sdk
-    rm -rf .git
-    autoupdate -fIv && ./autogen.sh
-    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
-    make -j$(nproc --all)
+    echo "Building MEGA SDK v4.8.0..."
+    
+    # Clone MEGA SDK v4.8.0
+    git clone --depth 1 --branch v4.8.0 https://github.com/meganz/sdk.git /tmp/sdk
+    cd /tmp/sdk
+    
+    # Build and configure
+    ./autogen.sh
+    ./configure --enable-python --with-sodium --disable-examples
+    
+    # Compile with all CPU cores
+    make -j$(nproc)
+    make install
+    ldconfig
+    
+    # Install Python bindings
+    cd bindings/python
+    python3 setup.py install
+    
+    # Alternative: build wheel for pip installation
+    # python3 setup.py bdist_wheel
+    # pip3 install --break-system-packages --no-cache-dir dist/megasdk-*.whl
+}
 
-    cd bindings/python/
-    python3.13 setup.py bdist_wheel
-    pip3 install --break-system-packages --no-cache-dir dist/megasdk-8.1.1-*.whl
+# Create additional symlinks
+create_symlinks() {
+    echo "Creating symlinks..."
+    ln -sf /usr/bin/ffprobe /usr/local/bin/ffprobe
+    ln -sf /usr/bin/mediainfo /usr/local/bin/mediainfo
 }
 
 # Clean up unnecessary packages and temporary files
 cleanup() {
-    apt-get remove -y \
+    echo "Cleaning up..."
+    
+    # Remove build dependencies
+    apt-get purge -y \
         autoconf automake build-essential cmake g++ gcc gettext \
         gpg-agent intltool libtool make unzip zip libcurl4-openssl-dev \
         libssl-dev libc-ares-dev libsqlite3-dev swig libboost-all-dev \
         libpthread-stubs0-dev zlib1g-dev
+    
     apt-get autoremove -y
     apt-get autoclean -y
+    apt-get clean
+    
+    # Remove temporary files
+    rm -rf /Temp /tmp/sdk /tmp/requirements.txt /var/lib/apt/lists/* Dockerfile
+}
 
-    rm -rf /Temp /home/sdk Dockerfile
+# Set working directory
+set_workdir() {
+    echo "Setting up working directory..."
+    mkdir -p /usr/src/app
+    cd /usr/src/app
 }
 
 # Main script execution
 main() {
+    echo "====================================="
+    echo "Starting installation process..."
+    echo "====================================="
+    
     update_system
     install_python
     install_dependencies
     install_qbittorrent
     install_ffmpeg
     install_rclone
+    install_uv
+    install_jdownloader
     install_python_packages
     build_mega_sdk
+    create_symlinks
     cleanup
+    set_workdir
+    
+    echo "====================================="
+    echo "Installation completed successfully!"
+    echo "====================================="
+    echo ""
+    echo "Installed components:"
+    echo "- Python 3.13"
+    echo "- qBittorrent-nox (as xnox and torrentgod)"
+    echo "- FFmpeg (as xtra and vidwarlock)"
+    echo "- rclone (as xone and cloudphantom)"
+    echo "- aria2 (as xria and speeddemon)"
+    echo "- JDownloader"
+    echo "- MEGA SDK v4.8.0"
+    echo "- UV package manager"
+    echo ""
+    echo "Working directory: /usr/src/app"
+    echo "====================================="
 }
 
 main

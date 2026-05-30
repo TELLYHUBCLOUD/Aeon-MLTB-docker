@@ -199,37 +199,29 @@ install_python_packages() {
     echo "✅ Python packages installed"
 }
 
-# Clone and build MEGA SDK v8.1.1 from TELLYHUBCLOUD repo
 build_mega_sdk() {
-    echo "======================================"
-    echo "🔧 Building MEGA SDK v8.1.1 (TELLYHUBCLOUD)..."
-    echo "======================================"
+    echo "🔧 Installing MEGA SDK from TELLYHUBCLOUD..."
     
-    # Clone MEGA SDK from TELLYHUBCLOUD repo
-    git clone https://github.com/TELLYHUBCLOUD/mega-sdk.git --depth=1 /home/sdk
-    cd /home/sdk
-    rm -rf .git
+    git clone https://github.com/TELLYHUBCLOUD/mega-sdk.git --depth=1 /tmp/megasdk
+    cd /tmp/megasdk
     
-    echo "🔨 Configuring MEGA SDK..."
-    # Build and configure
-    ./autogen.sh
-    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
-    
-    echo "⚙️  Compiling MEGA SDK (this may take a few minutes)..."
-    # Compile with all CPU cores
-    make -j$(nproc --all)
-    
-    echo "📦 Installing Python bindings..."
-    # Install Python bindings using wheel
-    cd bindings/python/
-    python3 setup.py bdist_wheel
-    pip3 install --break-system-packages --no-cache-dir dist/megasdk-*.whl
-    
-    # Verify installation
-    cd /
-    python3 -c "import mega; print('✅ MEGA SDK v8.1.1 imported successfully')" || echo "⚠️  MEGA SDK import check failed"
-    
-    echo "✅ MEGA SDK v8.1.1 installed from TELLYHUBCLOUD repo"
+    # If wheel file exists
+    if ls dist/megasdk-*.whl 1> /dev/null 2>&1; then
+        pip3 install --break-system-packages --no-cache-dir dist/megasdk-*.whl
+    else
+        echo "❌ No prebuilt wheel found, building from source..."
+        # Fallback to official repo
+        cd /
+        rm -rf /tmp/megasdk
+        git clone https://github.com/meganz/sdk.git --depth=1 -b v8.1.1 /home/sdk
+        cd /home/sdk
+        autoupdate -fIv && ./autogen.sh
+        ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
+        make -j$(nproc)
+        cd bindings/python
+        python3 setup.py bdist_wheel
+        pip3 install --break-system-packages dist/megasdk-*.whl
+    fi
 }
 
 # Create additional symlinks

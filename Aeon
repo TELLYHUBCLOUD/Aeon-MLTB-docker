@@ -84,10 +84,10 @@ install_qbittorrent() {
     echo "✅ qBittorrent-nox installed (xnox, torrentgod)"
 }
 
-# Install FFmpeg based on system architecture
+# Install FFmpeg from BtbN/FFmpeg-Builds (Latest 7.1.1)
 install_ffmpeg() {
     echo "======================================"
-    echo "🎬 Installing FFmpeg..."
+    echo "🎬 Installing FFmpeg 7.1.1 (BtbN)..."
     echo "======================================"
     ARCH=$(uname -m)
     mkdir -p /Temp
@@ -95,33 +95,50 @@ install_ffmpeg() {
 
     case "$ARCH" in
         x86_64)
-            wget -q --show-progress https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz
+            echo "📥 Downloading FFmpeg 7.1.1 for x86_64..."
+            wget -q --show-progress https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1.1-1ubuntu1-linux64-gpl-7.1.tar.xz
             ;;
         aarch64)
-            wget -q --show-progress https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz
+            echo "📥 Downloading FFmpeg 7.1.1 for aarch64..."
+            wget -q --show-progress https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1.1-1ubuntu1-linuxarm64-gpl-7.1.tar.xz
             ;;
         *)
-            echo "❌ Unsupported architecture for FFmpeg: $ARCH"
+            echo "❌ Unsupported architecture: $ARCH"
             exit 1
             ;;
     esac
 
     echo "📦 Extracting FFmpeg..."
-    7z x -y ffmpeg-n7.1-latest-linux*-gpl-7.1.tar.xz > /dev/null 2>&1
-    7z x -y ffmpeg-n7.1-latest-linux*-gpl-7.1.tar > /dev/null 2>&1
+    tar -xf ffmpeg-n7.1.1-1ubuntu1-linux*-gpl-7.1.tar.xz
     
-    mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffmpeg /usr/bin/xtra
-    mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffprobe /usr/bin/ffprobe
-    mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffplay /usr/bin/ffplay
-    chmod +x /usr/bin/xtra /usr/bin/ffprobe /usr/bin/ffplay
+    # Find the extracted directory
+    FFMPEG_DIR=$(find /Temp -maxdepth 1 -type d -name "ffmpeg-n7.1.1*" | head -n 1)
+    
+    if [ -z "$FFMPEG_DIR" ]; then
+        echo "❌ FFmpeg extraction failed"
+        exit 1
+    fi
+    
+    # Move binaries
+    mv "$FFMPEG_DIR/bin/ffmpeg" /usr/bin/xtra
+    mv "$FFMPEG_DIR/bin/ffprobe" /usr/bin/ffprobe
+    
+    # ffplay might not exist in all builds
+    if [ -f "$FFMPEG_DIR/bin/ffplay" ]; then
+        mv "$FFMPEG_DIR/bin/ffplay" /usr/bin/ffplay
+        chmod +x /usr/bin/ffplay
+    fi
+    
+    chmod +x /usr/bin/xtra /usr/bin/ffprobe
     
     # Create symlinks
     ln -sf /usr/bin/xtra /usr/local/bin/vidwarlock
     ln -sf /usr/bin/xtra /usr/local/bin/ffmpeg
+    ln -sf /usr/bin/ffprobe /usr/local/bin/ffprobe
     
     # Verify installation
     /usr/bin/xtra -version | head -n 1
-    echo "✅ FFmpeg installed (xtra, vidwarlock, ffmpeg)"
+    echo "✅ FFmpeg 7.1.1 installed (BtbN build)"
 }
 
 # Install rclone and create symlinks
@@ -199,29 +216,18 @@ install_python_packages() {
     echo "✅ Python packages installed"
 }
 
+# Clone and build MEGA SDK 4.8.0
 build_mega_sdk() {
-    echo "🔧 Installing MEGA SDK from TELLYHUBCLOUD..."
-    
-    git clone https://github.com/TELLYHUBCLOUD/mega-sdk.git --depth=1 /tmp/megasdk
-    cd /tmp/megasdk
-    
-    # If wheel file exists
-    if ls dist/megasdk-*.whl 1> /dev/null 2>&1; then
-        pip3 install --break-system-packages --no-cache-dir dist/megasdk-*.whl
-    else
-        echo "❌ No prebuilt wheel found, building from source..."
-        # Fallback to official repo
-        cd /
-        rm -rf /tmp/megasdk
-        git clone https://github.com/meganz/sdk.git --depth=1 -b v8.1.1 /home/sdk
-        cd /home/sdk
-        autoupdate -fIv && ./autogen.sh
-        ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
-        make -j$(nproc)
-        cd bindings/python
-        python3 setup.py bdist_wheel
-        pip3 install --break-system-packages dist/megasdk-*.whl
-    fi
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
+    cd /home/sdk
+    rm -rf .git
+    autoupdate -fIv && ./autogen.sh
+    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
+    make -j$(nproc --all)
+
+    cd bindings/python/
+    python3.12 setup.py bdist_wheel
+    pip3 install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
 }
 
 # Create additional symlinks
@@ -328,7 +334,7 @@ main() {
     echo "   • rclone (xone, cloudphantom, rclone)"
     echo "   • aria2 (xria, speeddemon, aria2c)"
     echo "   • JDownloader"
-    echo "   • MEGA SDK v8.1.1 (TELLYHUBCLOUD)"
+    echo "   • MEGA SDK v4.8.0"
     echo "   • UV package manager"
     echo ""
     echo "📁 Working directory: /usr/src/app"

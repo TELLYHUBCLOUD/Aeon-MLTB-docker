@@ -150,30 +150,26 @@ install_python_packages() {
     fi
 }
 
-# Clone and build MEGA SDK (v4.8.0)
+# Clone and build MEGA SDK v8.1.1
 build_mega_sdk() {
-    echo "Building MEGA SDK v4.8.0..."
+    echo "Building MEGA SDK v8.1.1..."
     
-    # Clone MEGA SDK v4.8.0
-    git clone --depth 1 --branch v4.8.0 https://github.com/meganz/sdk.git /tmp/sdk
-    cd /tmp/sdk
+    # Clone MEGA SDK v8.1.1
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v8.1.1 /home/sdk
+    cd /home/sdk
+    rm -rf .git
     
     # Build and configure
-    ./autogen.sh
-    ./configure --enable-python --with-sodium --disable-examples
+    autoupdate -fIv && ./autogen.sh
+    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
     
     # Compile with all CPU cores
-    make -j$(nproc)
-    make install
-    ldconfig
+    make -j$(nproc --all)
     
-    # Install Python bindings
-    cd bindings/python
-    python3 setup.py install
-    
-    # Alternative: build wheel for pip installation
-    # python3 setup.py bdist_wheel
-    # pip3 install --break-system-packages --no-cache-dir dist/megasdk-*.whl
+    # Install Python bindings using wheel
+    cd bindings/python/
+    python3.13 setup.py bdist_wheel
+    pip3 install --break-system-packages --no-cache-dir dist/megasdk-8.1.1-*.whl
 }
 
 # Create additional symlinks
@@ -199,7 +195,7 @@ cleanup() {
     apt-get clean
     
     # Remove temporary files
-    rm -rf /Temp /tmp/sdk /tmp/requirements.txt /var/lib/apt/lists/* Dockerfile
+    rm -rf /Temp /home/sdk /tmp/requirements.txt /var/lib/apt/lists/* Dockerfile
 }
 
 # Set working directory
@@ -240,7 +236,7 @@ main() {
     echo "- rclone (as xone and cloudphantom)"
     echo "- aria2 (as xria and speeddemon)"
     echo "- JDownloader"
-    echo "- MEGA SDK v4.8.0"
+    echo "- MEGA SDK v8.1.1"
     echo "- UV package manager"
     echo ""
     echo "Working directory: /usr/src/app"

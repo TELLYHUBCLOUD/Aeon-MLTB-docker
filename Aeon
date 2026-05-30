@@ -5,12 +5,12 @@ update_system() {
     apt-get update && apt-get upgrade -y
 }
 
-# Install Python 3.12 and essential dependencies
+# Install Python 3.13 and essential dependencies
 install_python() {
     apt-get install -y software-properties-common
     add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update
-    apt-get install -y python3.12 python3.12-dev python3.12-venv python3-pip libpython3.12 libpython3.12-dev
+    apt-get install -y python3.13 python3.13-dev python3.13-venv python3-pip libpython3.13 libpython3.13-dev
 }
 
 # Install additional system dependencies
@@ -93,9 +93,9 @@ install_python_packages() {
         setuptools speedtest-cli telegraph tenacity uv uvloop xattr yt-dlp[default]
 }
 
-# Clone and build MEGA SDK
+# Clone and build MEGA SDK 8.1.1
 build_mega_sdk() {
-    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v8.1.1 /home/sdk
     cd /home/sdk
     rm -rf .git
     autoupdate -fIv && ./autogen.sh
@@ -103,8 +103,8 @@ build_mega_sdk() {
     make -j$(nproc --all)
 
     cd bindings/python/
-    python3.12 setup.py bdist_wheel
-    pip3 install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
+    python3.13 setup.py bdist_wheel
+    pip3 install --break-system-packages --no-cache-dir dist/megasdk-8.1.1-*.whl
 }
 
 # Clean up unnecessary packages and temporary files

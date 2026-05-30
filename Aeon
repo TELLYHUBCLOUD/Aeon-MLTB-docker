@@ -5,17 +5,22 @@ export DEBIAN_FRONTEND=noninteractive
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
 export PIP_BREAK_SYSTEM_PACKAGES=1
-export LD_LIBRARY_PATH="/usr/local/lib"
+export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
+export PATH="/root/.cargo/bin:/usr/local/bin:${PATH}"
 
 # Update and upgrade system packages
 update_system() {
-    echo "Updating system packages..."
+    echo "======================================"
+    echo "📦 Updating system packages..."
+    echo "======================================"
     apt-get update && apt-get upgrade -y
 }
 
 # Install Python 3.13 and essential dependencies
 install_python() {
-    echo "Installing Python 3.13..."
+    echo "======================================"
+    echo "🐍 Installing Python 3.13..."
+    echo "======================================"
     apt-get install -y software-properties-common
     add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update
@@ -24,11 +29,17 @@ install_python() {
     # Set Python 3.13 as default
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
     update-alternatives --set python3 /usr/bin/python3.13
+    
+    # Verify installation
+    python3 --version
+    echo "✅ Python 3.13 installed successfully"
 }
 
 # Install all system dependencies (combined from both scripts)
 install_dependencies() {
-    echo "Installing system dependencies..."
+    echo "======================================"
+    echo "📚 Installing system dependencies..."
+    echo "======================================"
     apt-get install -y --no-install-recommends \
         apt-utils aria2 curl zstd git libmagic-dev libmagic1 \
         locales mediainfo libmediainfo0v5 neofetch p7zip-full \
@@ -42,11 +53,15 @@ install_dependencies() {
         libpcre3-dev libuv1-dev pkg-config \
         ca-certificates openjdk-17-jre-headless \
         cpulimit util-linux procps
+    
+    echo "✅ System dependencies installed"
 }
 
 # Download and install qbittorrent-nox based on system architecture
 install_qbittorrent() {
-    echo "Installing qBittorrent-nox..."
+    echo "======================================"
+    echo "🌊 Installing qBittorrent-nox..."
+    echo "======================================"
     ARCH=$(uname -m)
     mkdir -p /usr/local/bin
 
@@ -58,37 +73,43 @@ install_qbittorrent() {
             wget -qO /usr/local/bin/xnox https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.6.7_v2.0.10/aarch64-qbittorrent-nox
             ;;
         *)
-            echo "Unsupported architecture for qbittorrent-nox: $ARCH"
+            echo "❌ Unsupported architecture for qbittorrent-nox: $ARCH"
             exit 1
             ;;
     esac
 
     chmod 700 /usr/local/bin/xnox
     ln -sf /usr/local/bin/xnox /usr/local/bin/torrentgod
+    
+    echo "✅ qBittorrent-nox installed (xnox, torrentgod)"
 }
 
 # Install FFmpeg based on system architecture
 install_ffmpeg() {
-    echo "Installing FFmpeg..."
+    echo "======================================"
+    echo "🎬 Installing FFmpeg..."
+    echo "======================================"
     ARCH=$(uname -m)
     mkdir -p /Temp
     cd /Temp
 
     case "$ARCH" in
         x86_64)
-            wget https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz
+            wget -q --show-progress https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz
             ;;
         aarch64)
-            wget https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz
+            wget -q --show-progress https://github.com/5hojib/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-7.1.tar.xz
             ;;
         *)
-            echo "Unsupported architecture for FFmpeg: $ARCH"
+            echo "❌ Unsupported architecture for FFmpeg: $ARCH"
             exit 1
             ;;
     esac
 
-    7z x ffmpeg-n7.1-latest-linux*-gpl-7.1.tar.xz
-    7z x ffmpeg-n7.1-latest-linux*-gpl-7.1.tar
+    echo "📦 Extracting FFmpeg..."
+    7z x -y ffmpeg-n7.1-latest-linux*-gpl-7.1.tar.xz > /dev/null 2>&1
+    7z x -y ffmpeg-n7.1-latest-linux*-gpl-7.1.tar > /dev/null 2>&1
+    
     mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffmpeg /usr/bin/xtra
     mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffprobe /usr/bin/ffprobe
     mv /Temp/ffmpeg-n7.1-latest-linux*/bin/ffplay /usr/bin/ffplay
@@ -96,40 +117,66 @@ install_ffmpeg() {
     
     # Create symlinks
     ln -sf /usr/bin/xtra /usr/local/bin/vidwarlock
+    ln -sf /usr/bin/xtra /usr/local/bin/ffmpeg
+    
+    # Verify installation
+    /usr/bin/xtra -version | head -n 1
+    echo "✅ FFmpeg installed (xtra, vidwarlock, ffmpeg)"
 }
 
 # Install rclone and create symlinks
 install_rclone() {
-    echo "Installing rclone..."
-    curl https://rclone.org/install.sh | bash
+    echo "======================================"
+    echo "☁️  Installing rclone..."
+    echo "======================================"
+    curl -s https://rclone.org/install.sh | bash
+    
     mv /usr/bin/rclone /usr/bin/xone
     mv /usr/bin/aria2c /usr/bin/xria
     
     # Create additional symlinks
     ln -sf /usr/bin/xone /usr/local/bin/cloudphantom
+    ln -sf /usr/bin/xone /usr/local/bin/rclone
     ln -sf /usr/bin/xria /usr/local/bin/speeddemon
+    ln -sf /usr/bin/xria /usr/local/bin/aria2c
+    
+    echo "✅ rclone installed (xone, cloudphantom)"
+    echo "✅ aria2c installed (xria, speeddemon)"
 }
 
 # Install UV (Python package installer)
 install_uv() {
-    echo "Installing UV..."
+    echo "======================================"
+    echo "⚡ Installing UV package manager..."
+    echo "======================================"
     curl -LsSf https://astral.sh/uv/install.sh | sh
     export PATH="/root/.cargo/bin:$PATH"
     
-    # Install uv pip packages
+    # Verify UV installation
+    uv --version
+    
+    # Install base packages
     uv pip install --system cython setuptools wheel
+    
+    echo "✅ UV package manager installed"
 }
 
 # Install JDownloader
 install_jdownloader() {
-    echo "Installing JDownloader..."
+    echo "======================================"
+    echo "📥 Installing JDownloader..."
+    echo "======================================"
     mkdir -p /JDownloader/cfg
-    wget -O /JDownloader/JDownloader.jar http://installer.jdownloader.org/JDownloader.jar
+    wget -q --show-progress -O /JDownloader/JDownloader.jar http://installer.jdownloader.org/JDownloader.jar
+    
+    echo "✅ JDownloader installed"
 }
 
 # Install Python packages from requirements or default list
 install_python_packages() {
-    echo "Installing Python packages..."
+    echo "======================================"
+    echo "📦 Installing Python packages..."
+    echo "======================================"
     
     # Check if requirements.txt exists
     if [ -f "/tmp/requirements.txt" ] || [ -f "requirements.txt" ]; then
@@ -146,42 +193,82 @@ install_python_packages() {
             google-api-python-client google-auth-httplib2 google-auth-oauthlib \
             gunicorn httpx langcodes lxml motor mutagen markdown natsort pillow psutil \
             pybase64 pycountry python-dotenv pyshorteners python-magic qbittorrent-api requests \
-            setuptools speedtest-cli telegraph tenacity uv uvloop xattr yt-dlp[default]
+            setuptools speedtest-cli telegraph tenacity uvloop xattr yt-dlp[default]
     fi
+    
+    echo "✅ Python packages installed"
 }
 
 # Clone and build MEGA SDK v8.1.1
 build_mega_sdk() {
-    echo "Building MEGA SDK v8.1.1..."
+    echo "======================================"
+    echo "🔧 Building MEGA SDK v8.1.1..."
+    echo "======================================"
     
     # Clone MEGA SDK v8.1.1
     git clone https://github.com/meganz/sdk.git --depth=1 -b v8.1.1 /home/sdk
     cd /home/sdk
     rm -rf .git
     
+    echo "🔨 Configuring MEGA SDK..."
     # Build and configure
     autoupdate -fIv && ./autogen.sh
     ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
     
+    echo "⚙️  Compiling MEGA SDK (this may take a few minutes)..."
     # Compile with all CPU cores
     make -j$(nproc --all)
     
+    echo "📦 Building Python wheel..."
     # Install Python bindings using wheel
     cd bindings/python/
     python3.13 setup.py bdist_wheel
     pip3 install --break-system-packages --no-cache-dir dist/megasdk-8.1.1-*.whl
+    
+    # Verify installation
+    cd /
+    python3 -c "import mega; print('✅ MEGA SDK v8.1.1 imported successfully')" || echo "⚠️  MEGA SDK import check failed"
+    
+    echo "✅ MEGA SDK v8.1.1 installed"
 }
 
 # Create additional symlinks
 create_symlinks() {
-    echo "Creating symlinks..."
+    echo "======================================"
+    echo "🔗 Creating symlinks..."
+    echo "======================================"
+    
     ln -sf /usr/bin/ffprobe /usr/local/bin/ffprobe
+    ln -sf /usr/bin/ffplay /usr/local/bin/ffplay
     ln -sf /usr/bin/mediainfo /usr/local/bin/mediainfo
+    
+    echo "✅ Symlinks created"
+}
+
+# Verify installations
+verify_installations() {
+    echo "======================================"
+    echo "✅ Verifying installations..."
+    echo "======================================"
+    
+    echo "Python: $(python3 --version)"
+    echo "FFmpeg: $(/usr/bin/xtra -version 2>&1 | head -n 1)"
+    echo "rclone: $(xone version 2>&1 | head -n 1)"
+    echo "aria2c: $(xria --version 2>&1 | head -n 1)"
+    echo "qBittorrent: $(xnox --version 2>&1 | head -n 1)"
+    echo "UV: $(uv --version)"
+    
+    # Test MEGA SDK
+    python3 -c "import mega" 2>/dev/null && echo "MEGA SDK: ✅ OK" || echo "MEGA SDK: ⚠️  Warning"
+    
+    echo "======================================"
 }
 
 # Clean up unnecessary packages and temporary files
 cleanup() {
-    echo "Cleaning up..."
+    echo "======================================"
+    echo "🧹 Cleaning up..."
+    echo "======================================"
     
     # Remove build dependencies
     apt-get purge -y \
@@ -196,20 +283,28 @@ cleanup() {
     
     # Remove temporary files
     rm -rf /Temp /home/sdk /tmp/requirements.txt /var/lib/apt/lists/* Dockerfile
+    
+    echo "✅ Cleanup completed"
 }
 
 # Set working directory
 set_workdir() {
-    echo "Setting up working directory..."
+    echo "======================================"
+    echo "📁 Setting up working directory..."
+    echo "======================================"
     mkdir -p /usr/src/app
     cd /usr/src/app
+    chmod -R 777 /usr/src/app
+    echo "✅ Working directory: /usr/src/app"
 }
 
 # Main script execution
 main() {
-    echo "====================================="
-    echo "Starting installation process..."
-    echo "====================================="
+    echo "======================================"
+    echo "🚀 WZML-X Installation Script"
+    echo "======================================"
+    echo "Started at: $(date)"
+    echo ""
     
     update_system
     install_python
@@ -222,25 +317,28 @@ main() {
     install_python_packages
     build_mega_sdk
     create_symlinks
+    verify_installations
     cleanup
     set_workdir
     
-    echo "====================================="
-    echo "Installation completed successfully!"
-    echo "====================================="
     echo ""
-    echo "Installed components:"
-    echo "- Python 3.13"
-    echo "- qBittorrent-nox (as xnox and torrentgod)"
-    echo "- FFmpeg (as xtra and vidwarlock)"
-    echo "- rclone (as xone and cloudphantom)"
-    echo "- aria2 (as xria and speeddemon)"
-    echo "- JDownloader"
-    echo "- MEGA SDK v8.1.1"
-    echo "- UV package manager"
+    echo "======================================"
+    echo "✅ Installation completed successfully!"
+    echo "======================================"
     echo ""
-    echo "Working directory: /usr/src/app"
-    echo "====================================="
+    echo "📦 Installed components:"
+    echo "   • Python 3.13"
+    echo "   • qBittorrent-nox (xnox, torrentgod)"
+    echo "   • FFmpeg (xtra, vidwarlock, ffmpeg)"
+    echo "   • rclone (xone, cloudphantom, rclone)"
+    echo "   • aria2 (xria, speeddemon, aria2c)"
+    echo "   • JDownloader"
+    echo "   • MEGA SDK v8.1.1"
+    echo "   • UV package manager"
+    echo ""
+    echo "📁 Working directory: /usr/src/app"
+    echo "⏰ Completed at: $(date)"
+    echo "======================================"
 }
 
 main

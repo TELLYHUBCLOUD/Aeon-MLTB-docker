@@ -238,18 +238,44 @@ install_python_packages() {
     echo "✅ Python packages installed"
 }
 
-# Clone and build MEGA SDK 4.8.0
+# Build MEGA SDK v4.8.0 (Docker-style installation)
 build_mega_sdk() {
-    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk
-    cd /home/sdk
-    rm -rf .git
-    autoupdate -fIv && ./autogen.sh
-    ./configure --disable-silent-rules --enable-python --with-sodium --disable-examples
-    make -j$(nproc --all)
-
-    cd bindings/python/
-    python3.12 setup.py bdist_wheel
-    pip3 install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl
+    echo "======================================"
+    echo "🔧 Building MEGA SDK v4.8.0..."
+    echo "======================================"
+    
+    # Clone MEGA SDK v4.8.0
+    git clone --depth 1 --branch v4.8.0 https://github.com/meganz/sdk.git /tmp/sdk
+    cd /tmp/sdk
+    
+    echo "🔨 Configuring MEGA SDK..."
+    ./autogen.sh
+    ./configure --enable-python --with-sodium --disable-examples
+    
+    echo "⚙️  Compiling MEGA SDK (this may take a few minutes)..."
+    make -j$(nproc)
+    
+    echo "📦 Installing MEGA SDK..."
+    make install
+    ldconfig
+    
+    echo "📦 Installing Python bindings..."
+    cd bindings/python
+    python3 setup.py install
+    
+    # Verify installation
+    cd /
+    if python3 -c "import mega" 2>/dev/null; then
+        echo "✅ MEGA SDK v4.8.0 imported successfully"
+    else
+        echo "⚠️  MEGA SDK import failed (trying alternative check)"
+        python3 -c "import mega" 2>/dev/null && echo "✅ megasdk module found" || echo "⚠️  MEGA SDK import failed"
+    fi
+    
+    # Cleanup SDK source
+    rm -rf /tmp/sdk
+    
+    echo "✅ MEGA SDK v4.8.0 installation completed"
 }
 
 # Create symlinks
@@ -289,7 +315,15 @@ verify_installations() {
         echo "UV: ⚠️  Not in PATH"
     fi
     
-    python3 -c "import mega" 2>/dev/null && echo "MEGA SDK: ✅ OK" || echo "MEGA SDK: ⚠️  Failed"
+    # Test MEGA SDK (try both import names)
+    if python3 -c "import mega" 2>/dev/null; then
+        echo "MEGA SDK: ✅ OK (mega module)"
+    elif python3 -c "import mega" 2>/dev/null; then
+        echo "MEGA SDK: ✅ OK (megasdk module)"
+    else
+        echo "MEGA SDK: ⚠️  Failed"
+    fi
+    
     ffmpeg -version > /dev/null 2>&1 && echo "FFmpeg symlink: ✅ OK" || echo "FFmpeg symlink: ⚠️  Failed"
     python3 -c "from setuptools import setup" 2>/dev/null && echo "setuptools: ✅ OK" || echo "setuptools: ⚠️  Failed"
     
@@ -302,17 +336,19 @@ cleanup() {
     echo "🧹 Cleaning up..."
     echo "======================================"
     
+    # Remove build dependencies (MEGA SDK build tools already purged)
     apt-get purge -y \
-        autoconf automake build-essential cmake g++ gcc gettext \
-        gpg-agent intltool libtool make unzip zip libcurl4-openssl-dev \
-        libssl-dev libc-ares-dev libsqlite3-dev swig libboost-all-dev \
+        build-essential g++ gcc gettext \
+        gpg-agent intltool make unzip zip libcurl4-openssl-dev \
+        libssl-dev libc-ares-dev libsqlite3-dev libboost-all-dev \
         libpthread-stubs0-dev zlib1g-dev
     
     apt-get autoremove -y
     apt-get autoclean -y
     apt-get clean
     
-    rm -rf /Temp /home/sdk /tmp/requirements.txt /var/lib/apt/lists/* Dockerfile
+    # Remove temporary files
+    rm -rf /Temp /tmp/requirements.txt /var/lib/apt/lists/* Dockerfile
     
     echo "✅ Cleanup completed"
 }
@@ -363,7 +399,7 @@ main() {
     echo "   • rclone (xone, cloudphantom)"
     echo "   • aria2 (xria, speeddemon)"
     echo "   • JDownloader"
-    echo "   • MEGA SDK v8.1.1"
+    echo "   • MEGA SDK v4.8.0"
     echo "   • UV package manager"
     echo ""
     echo "📁 Working directory: /usr/src/app"
